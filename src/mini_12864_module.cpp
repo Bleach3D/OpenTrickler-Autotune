@@ -41,7 +41,6 @@
 #include "common.h"
 #include "mini_12864_module.h"
 #include "display.h"
-#include "ot_logo_icon.h"
 
 
 // Configs
@@ -414,23 +413,8 @@ void display_init() {
     }
     u8g2_SetDisplayRotation(&display_handler, u8g2_cb);
 
-    // Boot splash: brief logo screen before handing off to the normal menu.
-    u8g2_ClearBuffer(&display_handler);
-    {
-        uint8_t screen_width = u8g2_GetDisplayWidth(&display_handler);
-        uint8_t icon_x = (screen_width > OT_LOGO_ICON_WIDTH)
-            ? (uint8_t)((screen_width - OT_LOGO_ICON_WIDTH) / 2)
-            : 0;
-        u8g2_DrawXBM(&display_handler, icon_x, 2, OT_LOGO_ICON_WIDTH, OT_LOGO_ICON_HEIGHT, ot_logo_icon_bits);
-
-        u8g2_SetFont(&display_handler, u8g2_font_helvB08_tr);
-        const char *splash_text = "OpenTrickler";
-        uint8_t text_width = u8g2_GetStrWidth(&display_handler, splash_text);
-        uint8_t text_x = (screen_width > text_width) ? (uint8_t)((screen_width - text_width) / 2) : 0;
-        u8g2_DrawStr(&display_handler, text_x, 48, splash_text);
-    }
-    u8g2_SendBuffer(&display_handler);
-    sleep_ms(1200);
+    // The animated boot splash runs from menu_task() once the scheduler is
+    // up (see menu.c), so it doesn't delay WiFi or the rest of the boot.
 
     // Clear
     u8g2_ClearBuffer(&display_handler);

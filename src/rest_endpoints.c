@@ -123,8 +123,7 @@ bool http_favicon(struct fs_file *file, int num_params, char *params[], char *va
 // reliably, and never an .ico), which is why the home screen icon showed up
 // blank before this existed. icon_192/icon_512 back a manifest.json so
 // Android/Chrome's "Add to Home Screen" gets a proper icon too. All four use
-// the TP Custom Rifle Parts mark (see ot_logo_icon.h for the boot-screen
-// version this is derived from).
+// the original OpenTrickler favicon.
 bool http_apple_touch_icon(struct fs_file *file, int num_params, char *params[], char *values[]) {
     file->data = (const char *)apple_touch_icon_png;
     file->len = apple_touch_icon_png_len;

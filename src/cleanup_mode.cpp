@@ -31,6 +31,32 @@ static char title_string[30];
 TaskHandle_t cleanup_render_task_handler = NULL;
 
 
+// Cleanup speed limits: +/-10 rps, adjusted in 0.5 rps steps on the encoder.
+#define CLEANUP_SPEED_LIMIT_RPS     10.0f
+#define CLEANUP_SPEED_STEP_RPS      0.5f
+
+static float cleanup_clamp_speed(float speed) {
+    if (!(speed == speed)) {        // NaN from a bad REST value
+        return 0.0f;
+    }
+    if (speed > CLEANUP_SPEED_LIMIT_RPS) {
+        return CLEANUP_SPEED_LIMIT_RPS;
+    }
+    if (speed < -CLEANUP_SPEED_LIMIT_RPS) {
+        return -CLEANUP_SPEED_LIMIT_RPS;
+    }
+    return speed;
+}
+
+// Snap to the 0.5 rps grid (so encoder steps always land on clean values even
+// if the speed was set to something in between from the web UI).
+static float cleanup_snap_speed(float speed) {
+    float steps = speed / CLEANUP_SPEED_STEP_RPS;
+    long n = (long) (steps >= 0.0f ? steps + 0.5f : steps - 0.5f);
+    return cleanup_clamp_speed((float) n * CLEANUP_SPEED_STEP_RPS);
+}
+
+
 void cleanup_render_task(void *p) {
     char buf[32];
     float prev_weight = 0;
@@ -75,7 +101,7 @@ void cleanup_render_task(void *p) {
 
         // Draw current motor speed
         memset(buf, 0x0, sizeof(buf));
-        sprintf(buf, "Speed: %0.3f", cleanup_mode_config.trickler_speed);
+        sprintf(buf, "Speed: %0.1f rps", cleanup_mode_config.trickler_speed);
         u8g2_SetFont(display_handler, u8g2_font_profont11_tf);
         u8g2_DrawStr(display_handler, 5, 45, buf);
 
@@ -134,11 +160,11 @@ uint8_t cleanup_mode_menu() {
 
                 break;
             case BUTTON_ENCODER_ROTATE_CW:
-                cleanup_mode_config.trickler_speed += 1;
+                cleanup_mode_config.trickler_speed = cleanup_snap_speed(cleanup_mode_config.trickler_speed + CLEANUP_SPEED_STEP_RPS);
                 motor_set_speed(SELECT_BOTH_MOTOR, cleanup_mode_config.trickler_speed);
                 break;
             case BUTTON_ENCODER_ROTATE_CCW:
-                cleanup_mode_config.trickler_speed -= 1;
+                cleanup_mode_config.trickler_speed = cleanup_snap_speed(cleanup_mode_config.trickler_speed - CLEANUP_SPEED_STEP_RPS);
                 motor_set_speed(SELECT_BOTH_MOTOR, cleanup_mode_config.trickler_speed);
                 break;
 
@@ -194,7 +220,7 @@ bool http_rest_cleanup_mode_state(struct fs_file *file, int num_params, char *pa
             cleanup_mode_config.cleanup_mode_state = new_state;
         }
         else if (strcmp(params[idx], "s1") == 0) {
-            cleanup_mode_config.trickler_speed = strtof(values[idx], NULL);
+            cleanup_mode_config.trickler_speed = cleanup_clamp_speed(strtof(values[idx], NULL));
             motor_set_speed(SELECT_BOTH_MOTOR, cleanup_mode_config.trickler_speed);
         }
     }

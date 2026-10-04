@@ -726,7 +726,7 @@ uint8_t pid_autotune_menu(void) {
 
     if (ok) {
         pid_autotune.state = PID_AUTOTUNE_STATE_DONE;
-        set_message("Done - review on web GUI");
+        set_message("Done - push to continue");
         neopixel_led_set_colour(charge_mode_config.eeprom_charge_mode_data.neopixel_normal_charge_colour,
                                 charge_mode_config.eeprom_charge_mode_data.neopixel_normal_charge_colour,
                                 charge_mode_config.eeprom_charge_mode_data.neopixel_normal_charge_colour, true);
@@ -737,7 +737,7 @@ uint8_t pid_autotune_menu(void) {
         // signal so the on-device screen keeps showing the result.
         while (true) {
             ButtonEncoderEvent_t ev = button_wait_for_input(true);
-            if (ev == BUTTON_RST_PRESSED || ev == OVERRIDE_FROM_REST) break;
+            if (ev == BUTTON_RST_PRESSED || ev == BUTTON_ENCODER_PRESSED || ev == OVERRIDE_FROM_REST) break;
         }
     }
     else {

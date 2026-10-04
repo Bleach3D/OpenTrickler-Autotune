@@ -40,7 +40,6 @@ bool access_point_mode_start() {
     dhcp_server_init(&dhcp_server, &gw, &mask);
 
     // Start the dns server
-    dns_server_t dns_server;
     dns_server_init(&dns_server, &gw);
 
     sprintf(first_line_buffer, ">%s", host_name);

@@ -165,6 +165,56 @@ uint8_t render_charge_mode_next_button(mui_t * ui, uint8_t msg) {
 }
 
 
+// "Next" on the Autotune profile page: routes to the tuning that matches the
+// selected profile's controller, the same way the web GUI swaps its PID
+// Tuning / AI Tuning tab. arg = form for the PID controller, arg+1 = form for
+// the adaptive (AI) controller.
+uint8_t render_autotune_controller_next_button(mui_t * ui, uint8_t msg) {
+    switch (msg) {
+        case MUIF_MSG_CURSOR_SELECT:
+        case MUIF_MSG_VALUE_INCREMENT:
+        case MUIF_MSG_VALUE_DECREMENT:
+        {
+            uint8_t target = ui->arg;
+            charge_mode_data_load_for_profile((uint8_t) profile_get_selected_idx());
+            if (charge_mode_config.eeprom_charge_mode_data.use_adaptive_controller) {
+                target += 1;
+            }
+            mui_SaveForm(ui);
+            return mui_GotoFormAutoCursorPosition(ui, target);
+        }
+        default:
+            mui_u8g2_btn_goto_wm_fi(ui, msg);
+            break;
+    }
+    return 0;
+}
+
+
+// "Next" into a weight-entry page: arg = 2-decimal form, arg+1 = 3-decimal
+// form, matching the active profile's decimal places (like "B1" does for
+// forms 11/12).
+uint8_t render_weight_entry_next_button(mui_t * ui, uint8_t msg) {
+    switch (msg) {
+        case MUIF_MSG_CURSOR_SELECT:
+        case MUIF_MSG_VALUE_INCREMENT:
+        case MUIF_MSG_VALUE_DECREMENT:
+        {
+            uint8_t target = ui->arg;
+            if (charge_mode_config.eeprom_charge_mode_data.decimal_places == DP_3) {
+                target += 1;
+            }
+            mui_SaveForm(ui);
+            return mui_GotoFormAutoCursorPosition(ui, target);
+        }
+        default:
+            mui_u8g2_btn_goto_wm_fi(ui, msg);
+            break;
+    }
+    return 0;
+}
+
+
 uint8_t render_profile_misc_details(mui_t *ui, uint8_t msg) {
     switch(msg)
     {
@@ -253,6 +303,8 @@ muif_t muif_list[] = {
         MUIF_BUTTON("BN", mui_u8g2_btn_goto_wm_fi),
 
         MUIF_BUTTON("B1", render_charge_mode_next_button),
+        MUIF_BUTTON("BC", render_autotune_controller_next_button),
+        MUIF_BUTTON("BW", render_weight_entry_next_button),
 
         // Leave
         MUIF_VARIABLE("LV", &exit_state, mui_u8g2_btn_exit_wm_fi),
@@ -297,6 +349,7 @@ fds_t fds_data[] = {
     MUI_STYLE(0)
     MUI_DATA("MU", 
         MUI_10 "Start|"
+        MUI_70 "Autotune|"
         MUI_20 "Cleanup|"
         MUI_40 "Wireless|"
         MUI_30 "Settings"
@@ -376,6 +429,176 @@ fds_t fds_data[] = {
     MUI_STYLE(0)
     MUI_XYAT("BN",14, 59, 10, "Back")
     MUI_XYAT("LV", 115, 59, 1, "Next")  // APP_STATE_ENTER_CHARGE_MODE
+
+    // Menu 70: Autotune - select profile, then route by its controller
+    MUI_FORM(70)
+    MUI_STYLE(1)
+    MUI_LABEL(5,10, "Autotune: Profile")
+    MUI_XY("HL", 0,13)
+
+    MUI_STYLE(0)
+    MUI_XYAT("BC",115, 59, 71, "Next")  // 71 (PID) or 72 (AI)
+    MUI_XYAT("BN",14, 59, 1, "Back")
+    MUI_XYA("P0", 5, 25, 33)  // Jump to form 33 (profile selection)
+
+    // Menu 71: PID Autotune
+    MUI_FORM(71)
+    MUI_STYLE(1)
+    MUI_LABEL(5,10, "PID Autotune")
+    MUI_XY("HL", 0,13)
+
+    MUI_STYLE(0)
+    MUI_LABEL(5, 24, "Empty pan on the scale.")
+    MUI_LABEL(5, 34, "Runs test throws, then")
+    MUI_LABEL(5, 44, "fits the PID values.")
+    MUI_XYAT("BN",14, 59, 70, "Back")
+    MUI_XYAT("LV", 110, 59, 12, "Start")  // APP_STATE_ENTER_PID_AUTOTUNE
+
+    // Menu 72: AI Tuning
+    MUI_FORM(72)
+    MUI_STYLE(1)
+    MUI_LABEL(5,10, "AI Tuning")
+    MUI_XY("HL", 0,13)
+
+    MUI_STYLE(0)
+    MUI_DATA("MU",
+        MUI_73 "Characterize Powder|"
+        MUI_76 "Machine Calibration|"
+        MUI_70 "<-Return"
+        )
+    MUI_XYA("GC", 5, 25, 0)
+    MUI_XYA("GC", 5, 37, 1)
+    MUI_XYA("GC", 5, 49, 2)
+
+    // Menu 73: Characterize info
+    MUI_FORM(73)
+    MUI_STYLE(1)
+    MUI_LABEL(5,10, "Characterize Powder")
+    MUI_XY("HL", 0,13)
+
+    MUI_STYLE(0)
+    MUI_LABEL(5, 24, "Enter your usual charge.")
+    MUI_LABEL(5, 34, "Test charges then run")
+    MUI_LABEL(5, 44, "like normal charging.")
+    MUI_XYAT("BN",14, 59, 72, "Back")
+    MUI_XYAT("BW",115, 59, 74, "Next")  // 74 (2dp) or 75 (3dp)
+
+    // Menu 74: AI tuning target weight (2dp)
+    MUI_FORM(74)
+    MUI_STYLE(1)
+    MUI_LABEL(5,10, "Target Charge Weight")
+    MUI_XY("HL", 0,13)
+
+    MUI_STYLE(3)
+    MUI_XY("N3",36, 35)
+    MUI_XY("N2",52, 35)
+    MUI_LABEL(64, 35, ".")
+    MUI_XY("N1",76, 35)
+    MUI_XY("N0",92, 35)
+
+    MUI_STYLE(0)
+    MUI_XYAT("BN",115, 59, 80, "Next")
+    MUI_XYAT("BN",14, 59, 73, "Back")
+
+    MUI_STYLE(3)
+    MUI_XY("N4",20, 35)
+
+    // Menu 75: AI tuning target weight (3dp)
+    MUI_FORM(75)
+    MUI_STYLE(1)
+    MUI_LABEL(5,10, "Target Charge Weight")
+    MUI_XY("HL", 0,13)
+
+    MUI_STYLE(3)
+    MUI_XY("N3",36, 35)
+    MUI_LABEL(48, 35, ".")
+    MUI_XY("N2",60, 35)
+    MUI_XY("N1",76, 35)
+    MUI_XY("N0",92, 35)
+
+    MUI_STYLE(0)
+    MUI_XYAT("BN",115, 59, 80, "Next")
+    MUI_XYAT("BN",14, 59, 73, "Back")
+
+    MUI_STYLE(3)
+    MUI_XY("N4",20, 35)
+
+    // Menu 76: Machine calibration info
+    MUI_FORM(76)
+    MUI_STYLE(1)
+    MUI_LABEL(5,10, "Machine Calibration")
+    MUI_XY("HL", 0,13)
+
+    MUI_STYLE(0)
+    MUI_LABEL(5, 24, "Needs a saved powder")
+    MUI_LABEL(5, 34, "characterization for")
+    MUI_LABEL(5, 44, "this profile.")
+    MUI_XYAT("BN",14, 59, 72, "Back")
+    MUI_XYAT("BW",115, 59, 77, "Next")  // 77 (2dp) or 78 (3dp)
+
+    // Menu 77: AI tuning target weight (2dp)
+    MUI_FORM(77)
+    MUI_STYLE(1)
+    MUI_LABEL(5,10, "Target Charge Weight")
+    MUI_XY("HL", 0,13)
+
+    MUI_STYLE(3)
+    MUI_XY("N3",36, 35)
+    MUI_XY("N2",52, 35)
+    MUI_LABEL(64, 35, ".")
+    MUI_XY("N1",76, 35)
+    MUI_XY("N0",92, 35)
+
+    MUI_STYLE(0)
+    MUI_XYAT("BN",115, 59, 79, "Next")
+    MUI_XYAT("BN",14, 59, 76, "Back")
+
+    MUI_STYLE(3)
+    MUI_XY("N4",20, 35)
+
+    // Menu 78: AI tuning target weight (3dp)
+    MUI_FORM(78)
+    MUI_STYLE(1)
+    MUI_LABEL(5,10, "Target Charge Weight")
+    MUI_XY("HL", 0,13)
+
+    MUI_STYLE(3)
+    MUI_XY("N3",36, 35)
+    MUI_LABEL(48, 35, ".")
+    MUI_XY("N2",60, 35)
+    MUI_XY("N1",76, 35)
+    MUI_XY("N0",92, 35)
+
+    MUI_STYLE(0)
+    MUI_XYAT("BN",115, 59, 79, "Next")
+    MUI_XYAT("BN",14, 59, 76, "Back")
+
+    MUI_STYLE(3)
+    MUI_XY("N4",20, 35)
+
+    // Menu 79: Machine calibration - put pan on scale
+    MUI_FORM(79)
+    MUI_STYLE(1)
+    MUI_LABEL(5, 10, "Warning")
+    MUI_XY("HL", 0,13)
+
+    MUI_STYLE(0)
+    MUI_LABEL(5, 25, "Put pan on the scale and")
+    MUI_LABEL(5, 37, "press Start to calibrate")
+    MUI_XYAT("BN",14, 59, 76, "Back")
+    MUI_XYAT("LV", 110, 59, 14, "Start")  // APP_STATE_ENTER_AI_MACHINE_CAL
+
+    // Menu 80: Characterize - put pan on scale
+    MUI_FORM(80)
+    MUI_STYLE(1)
+    MUI_LABEL(5, 10, "Warning")
+    MUI_XY("HL", 0,13)
+
+    MUI_STYLE(0)
+    MUI_LABEL(5, 25, "Put pan on the scale and")
+    MUI_LABEL(5, 37, "press Start to tune")
+    MUI_XYAT("BN",14, 59, 73, "Back")
+    MUI_XYAT("LV", 110, 59, 13, "Start")  // APP_STATE_ENTER_AI_TUNING
 
     // Menu 20: Cleanup
     MUI_FORM(20)

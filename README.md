@@ -1,4 +1,28 @@
-# TP Custom Rifle Parts — OpenTrickler ML Firmware
+# OpenTrickler Autotune
+
+Firmware for the OpenTrickler Raspberry Pi Pico 2 W / RP2350 controller, based on
+[thomaspember1990/OpenTrickler-Firmware](https://github.com/thomaspember1990/OpenTrickler-Firmware)
+(TP Custom Rifle Parts fork, see below for its full lineage). Licensed under GPL-3.0 like the original.
+
+## Changes in this version
+
+**Fixes**
+- **AP setup hotspot:** the DNS server in `access_point_mode_start()` was declared as a local variable shadowing the static one; lwIP kept a dangling pointer to stack memory, which most likely crashed the board as soon as a client connected. Wireless task stack raised from 512 to 1024 words.
+- **AI characterization stalled on "Remove Cup":** the coarse stop snapshot used the normal-charge plausibility check (> 3 % of the charge target), so the small early characterization pulses were rejected and never recorded. The AI sample path now uses the raw stop measurement.
+- **Microstepping changed motor speed:** a microstep / current / R-sense change from the web UI only updated the step-rate maths, the TMC2209 kept its old settings until reboot. Now applied to the driver immediately (with MRES read-back). Minimum step rate lowered from 100 to 10 steps/s so the fine trickler no longer stops at its minimum speed with 64 or fewer microsteps.
+
+**Features / UI**
+- Web UI back to the original OpenTrickler (DaisyUI default) look, without branding; theming/Appearance page removed; original OpenTrickler icons.
+- "OpenTrickler Autotune" header in the web UI and an animated 10 s boot splash on the display (any button skips it; it runs while WiFi connects in the background).
+- PID Autotune and AI tuning (powder characterization, machine calibration) can be started from the encoder menu, with save / discard of the result on the device.
+- Reset button goes one page back in the menus.
+- Up to 5 known WiFi networks: scans and joins the strongest visible one, then tries hidden ones, then falls back to the setup hotspot.
+- Cleanup speed limited to +/-10 rps in 0.5 rps steps.
+- OTA update source defaults to this repository (`Bleach3D/OpenTrickler-Autotune`).
+
+---
+
+## Original README (TP Custom Rifle Parts fork)
 
 Public beta firmware for the OpenTrickler Raspberry Pi Pico 2 W / RP2350 controller, with profile-aware flow characterization, machine calibration, automatic runtime learning, REST status endpoints, and OTA staging.
 

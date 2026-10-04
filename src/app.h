@@ -18,6 +18,9 @@ typedef enum {
     APP_STATE_ENTER_REBOOT = 9,
     APP_STATE_ENTER_WIFI_INFO = 10,
     APP_STATE_ENTER_PID_AUTOTUNE_FROM_REST = 11,
+    APP_STATE_ENTER_PID_AUTOTUNE = 12,          // started from the encoder menu
+    APP_STATE_ENTER_AI_TUNING = 13,             // AI characterization from the encoder menu
+    APP_STATE_ENTER_AI_MACHINE_CAL = 14,        // AI machine calibration from the encoder menu
 } AppState_t;
 
 

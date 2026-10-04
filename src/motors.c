@@ -20,7 +20,13 @@
 #include "neopixel_led.h" // in case the stepper motor driver failed to initialize
 
 #define STEPPER_LOW_CYCLE_COUNT 13  // Defined as the implementation of stepper.pio
-#define MAX_RESPONSE_TIME   0.01f   // Maximum response time for PIO stepper
+// Longest step period the PIO is allowed to hold. Anything slower is treated
+// as "stop". A new speed only takes effect at the next step, so this is also
+// the worst-case response time at the very slowest speeds. Was 10 ms
+// (= 100 steps/s minimum), which silently stopped the fine trickler at its
+// minimum speed once microstepping was set to 64 or lower; 100 ms allows down
+// to 10 steps/s while one late microstep moves a negligible amount of powder.
+#define MAX_RESPONSE_TIME   0.1f
 
 
 // Internal data structure for speed control between tasks
@@ -208,13 +214,20 @@ TMC_uart_write_datagram_t *tmc_uart_read (trinamic_motor_t driver, TMC_uart_read
 uint32_t speed_to_period(float speed, uint32_t pio_clock_speed, uint32_t full_rotation_steps) {
     // speed: rev/s
     float step_speed = full_rotation_steps * speed;    // in steps/s
+    if (!(step_speed > 0.0f)) {
+        return 0;   // stop
+    }
 
-    uint32_t full_cycle_count = lroundf(pio_clock_speed / step_speed);
-
-    // Limit by maximum response time
+    // Limit by maximum response time (checked in float before rounding, so a
+    // tiny speed can't overflow lroundf)
+    float cycles = (float) pio_clock_speed / step_speed;
     uint32_t max_response_steps = pio_clock_speed * MAX_RESPONSE_TIME;
-    if (full_cycle_count > max_response_steps){ 
+    uint32_t full_cycle_count;
+    if (cycles > (float) max_response_steps) {
         full_cycle_count = 0;
+    }
+    else {
+        full_cycle_count = (uint32_t) lroundf(cycles);
     }
 
     // Avoid wrap around
@@ -792,6 +805,8 @@ void populate_rest_motor_config(motor_config_t * motor_config, char * buf, size_
 void apply_rest_motor_config(motor_config_t * motor_config, int num_params, char *params[], char *values[]) {
     bool save_to_eeprom = false;
     bool direction_config_changed = false;
+    bool microsteps_changed = false;
+    bool current_changed = false;
 
     for (int idx = 0; idx < num_params; idx += 1) {
         if (strcmp(params[idx], "m0") == 0) {
@@ -804,11 +819,17 @@ void apply_rest_motor_config(motor_config_t * motor_config, int num_params, char
         }
         else if (strcmp(params[idx], "m2") == 0) {
             uint16_t current_ma = (uint16_t) atoi(values[idx]);
+            current_changed |= motor_config->persistent_config.current_ma != current_ma;
             motor_config->persistent_config.current_ma = current_ma;
         }
         else if (strcmp(params[idx], "m3") == 0) {
             uint16_t microsteps = (uint16_t) atoi(values[idx]);
-            motor_config->persistent_config.microsteps = microsteps;
+            // TMC2209 supports 1..256 in powers of two only; anything else
+            // would make the driver and the step-rate maths disagree.
+            if (microsteps >= 1 && microsteps <= 256 && (microsteps & (microsteps - 1)) == 0) {
+                microsteps_changed |= motor_config->persistent_config.microsteps != microsteps;
+                motor_config->persistent_config.microsteps = microsteps;
+            }
         }
         else if (strcmp(params[idx], "m4") == 0) {
             uint16_t max_speed_rps = (uint16_t) atoi(values[idx]);
@@ -816,6 +837,7 @@ void apply_rest_motor_config(motor_config_t * motor_config, int num_params, char
         }
         else if (strcmp(params[idx], "m5") == 0) {
             uint16_t r_sense = (uint16_t) atoi(values[idx]);
+            current_changed |= motor_config->persistent_config.r_sense != r_sense;
             motor_config->persistent_config.r_sense = r_sense;
         }
         else if (strcmp(params[idx], "m6") == 0) {
@@ -837,6 +859,35 @@ void apply_rest_motor_config(motor_config_t * motor_config, int num_params, char
         }
         else if (strcmp(params[idx], "ee") == 0) {
             save_to_eeprom = string_to_boolean(values[idx]);
+        }
+    }
+
+    /*
+     * Push driver-side settings to the TMC2209 right away. The step-rate maths
+     * (speed_ramp -> full_steps_per_rotation * microsteps) uses the new value
+     * immediately, so if the driver kept its old MRES until the next reboot the
+     * motor would run at old/new times the commanded speed in the meantime.
+     * Same for current / sense resistor.
+     */
+    TMC2209_t *tmc_driver = (TMC2209_t *) motor_config->tmc_driver;
+    if (tmc_driver != NULL) {
+        if (microsteps_changed) {
+            TMC2209_SetMicrosteps(tmc_driver, (tmc2209_microsteps_t) motor_config->persistent_config.microsteps);
+
+            // Read back to make sure the driver actually took it
+            TMC2209_ReadRegister(tmc_driver, (TMC2209_datagram_t *) &tmc_driver->chopconf);
+            uint8_t expected_mres = tmc_microsteps_to_mres(motor_config->persistent_config.microsteps);
+            if (tmc_driver->chopconf.reg.mres != expected_mres) {
+                printf("TMC2209 @%d: MRES readback %d, expected %d\n",
+                       motor_config->uart_addr, tmc_driver->chopconf.reg.mres, expected_mres);
+                // Keep the RAM copy consistent with what we asked for
+                tmc_driver->chopconf.reg.mres = expected_mres;
+            }
+        }
+        if (current_changed) {
+            tmc_driver->config.r_sense = motor_config->persistent_config.r_sense;
+            TMC2209_SetCurrent(tmc_driver, motor_config->persistent_config.current_ma,
+                               tmc_driver->config.hold_current_pct);
         }
     }
 

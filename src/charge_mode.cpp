@@ -1800,23 +1800,23 @@ void charge_mode_wait_for_complete() {
         }
         else {
             ok = run_motor_for_duration(SELECT_COARSE_TRICKLER_MOTOR, plan_speed_rps, plan_on_time_ms);
-            if (ok) {
-                float stop_weight = capture_coarse_stop_measurement(320, start_weight);
-                mark_coarse_stop(stop_weight, true);
-            }
         }
 
         if (!ok) {
             return;
         }
 
+        // Stop snapshot for the AI sample. Deliberately NOT routed through
+        // capture_coarse_stop_measurement(): that helper only accepts weights
+        // above max(0.20, 3 % of the *charge* target), which is meant for a
+        // real charge. Early characterization pulses are tiny on purpose
+        // (120-300 ms), so with e.g. a 43.5 gr target every pulse below
+        // ~1.3 gr came back as NaN, ai_tuning_record_drop() rejected the
+        // drop, and charge mode silently fell through to "Remove Cup".
         TickType_t motor_end_tick = xTaskGetTickCount();
         float stop_weight = get_latest_measurement(250, start_weight);
         if (sample_motor_mode == AI_MOTOR_MODE_COARSE_ONLY) {
-            stop_weight = capture_coarse_stop_measurement(320, stop_weight);
-            if (!coarse_stop_weight_valid) {
-                mark_coarse_stop(stop_weight, true);
-            }
+            mark_coarse_stop(stop_weight, true);
         }
 
         memset(&pending_ai_drop, 0, sizeof(pending_ai_drop));
@@ -3913,6 +3913,29 @@ void charge_mode_wait_for_cup_return() {
 }
 
 
+// Target weight as entered on the encoder weight-entry forms (11/12, and the
+// AI-tuning copies 74/75 and 77/78), using the decimal places of whichever
+// profile's charge mode settings are currently loaded.
+float charge_mode_target_weight_from_digits(void) {
+    switch (charge_mode_config.eeprom_charge_mode_data.decimal_places) {
+        case DP_2:
+            return (float) (charge_weight_digits[4] * 100 +
+                   charge_weight_digits[3] * 10 +
+                   charge_weight_digits[2] * 1 +
+                   charge_weight_digits[1] * 0.1 +
+                   charge_weight_digits[0] * 0.01);
+        case DP_3:
+            return (float) (charge_weight_digits[4] * 10 +
+                   charge_weight_digits[3] * 1 +
+                   charge_weight_digits[2] * 0.1 +
+                   charge_weight_digits[1] * 0.01 +
+                   charge_weight_digits[0] * 0.001);
+        default:
+            return 0.0f;
+    }
+}
+
+
 uint8_t charge_mode_menu(bool charge_mode_skip_user_input) {
     charge_mode_menu_active = true;
 
@@ -3925,25 +3948,7 @@ uint8_t charge_mode_menu(bool charge_mode_skip_user_input) {
 
     // Create target weight, if the charge mode weight is built by charge_weight_digits
     if (!charge_mode_skip_user_input) {
-        switch (charge_mode_config.eeprom_charge_mode_data.decimal_places) {
-            case DP_2:
-                charge_mode_config.target_charge_weight = charge_weight_digits[4] * 100 + \
-                                                charge_weight_digits[3] * 10 + \
-                                                charge_weight_digits[2] * 1 + \
-                                                charge_weight_digits[1] * 0.1 + \
-                                                charge_weight_digits[0] * 0.01;
-                break;
-            case DP_3:
-                charge_mode_config.target_charge_weight = charge_weight_digits[4] * 10 + \
-                                                charge_weight_digits[3] * 1 + \
-                                                charge_weight_digits[2] * 0.1 + \
-                                                charge_weight_digits[1] * 0.01 + \
-                                                charge_weight_digits[0] * 0.001;
-                break;
-            default:
-                charge_mode_config.target_charge_weight = 0;
-                break;
-        }
+        charge_mode_config.target_charge_weight = charge_mode_target_weight_from_digits();
     }
 
     // If the display task is never created then we shall create one, otherwise we shall resume the task

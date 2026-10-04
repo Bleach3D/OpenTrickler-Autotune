@@ -166,6 +166,7 @@ extern "C" {
 
 bool charge_mode_config_init(void);
 uint8_t charge_mode_menu(bool charge_mode_skip_user_input);
+float charge_mode_target_weight_from_digits(void);
 bool charge_mode_config_save(void);
 bool charge_mode_is_menu_active(void);
 

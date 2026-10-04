@@ -20,7 +20,7 @@
 
 typedef struct {
     uint16_t update_config_rev;
-    char owner[40];   // GitHub org/user, e.g. "thomaspember1990"
+    char owner[40];   // GitHub org/user, e.g. "Bleach3D"
     char repo[64];    // GitHub repository name, e.g. "OpenTrickler-Firmware"
 } eeprom_update_config_t;
 

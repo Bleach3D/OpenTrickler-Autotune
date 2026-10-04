@@ -44,8 +44,8 @@ static const eeprom_update_config_t default_eeprom_update_config = {
     // Leave update_config_rev at 0 -- see common.c's load_config(): a
     // nonzero first field is only meaningful for migrating pre-CRC32
     // configs, which this newly-added region never had.
-    .owner = "thomaspember1990",
-    .repo = "OpenTrickler-Firmware",
+    .owner = "Bleach3D",
+    .repo = "OpenTrickler-Autotune",
 };
 
 // ---------------------------------------------------------------------------
