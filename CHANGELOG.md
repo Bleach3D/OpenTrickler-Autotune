@@ -1,4 +1,63 @@
-# Changelog — TP Custom Rifle Parts Fork
+# Changelog — OpenTrickler Autotune
+
+All notable changes to **OpenTrickler Autotune** are documented here.
+Versions follow [Semantic Versioning](https://semver.org/):
+`MAJOR` for incompatible changes (e.g. an EEPROM layout change that resets
+settings), `MINOR` for new features, `PATCH` for bug fixes.
+
+The released version string lives in `RELEASE_VERSION`; it must match the git
+tag and the GitHub release name exactly, because the on-device update check
+compares the version strings literally.
+
+## [Unreleased]
+
+## [v1.0.0] — 2026-10-04
+
+Based on TP Custom Rifle Parts fork `v2026.09.23-fork.32` (commit `674afab`).
+
+### Fixed
+
+- **Setup hotspot:** `access_point_mode_start()` declared the DNS server as a
+  local variable shadowing the static one, leaving lwIP with a dangling
+  pointer to stack memory; most likely crashed the board on the first DNS
+  query from a connecting client. Wireless task stack 512 -> 1024 words.
+- **AI characterization stalled on "Remove Cup":** the coarse stop snapshot
+  used the normal-charge plausibility check (> 3 % of the charge target), so
+  small early characterization pulses returned NaN and were never recorded.
+  The AI sample path now uses the raw stop measurement (the measured coarse
+  on-time no longer includes that helper's up-to-320 ms wait).
+- **Microstepping changed motor speed:** microsteps / current / R-sense set
+  from the web UI only reached the step-rate maths, not the TMC2209, until a
+  reboot. Now applied to the driver immediately with MRES read-back.
+- **Fine trickler stopped at minimum speed with <= 64 microsteps:** maximum
+  PIO step period raised from 10 ms to 100 ms (min. 10 steps/s); zero / tiny
+  speeds guarded against `lroundf` overflow.
+- WiFi SSIDs are JSON-escaped in the REST response.
+
+### Added
+
+- Animated 10 s boot splash "OpenTrickler / AUTOTUNE"; any button skips it.
+  Runs in the menu task, so WiFi connects in the background meanwhile.
+- "OpenTrickler Autotune" header in the web UI.
+- PID Autotune, AI powder characterization and AI machine calibration can be
+  started from the encoder menu (routed by the profile's controller), with
+  on-device save / discard of the result.
+- Reset button goes one page back in the menus (ends field editing first).
+- Up to 5 known WiFi networks: scan, strongest visible first, then hidden
+  SSIDs, then fall back to the setup hotspot.
+
+### Changed
+
+- Web UI restored to the original OpenTrickler (DaisyUI default) look without
+  branding; Appearance / theming page removed; original OpenTrickler icons.
+- Cleanup speed limited to +/-10 rps, adjusted in 0.5 rps steps.
+- OTA update source defaults to `Bleach3D/OpenTrickler-Autotune`.
+- HTTP request limits raised (URI 2000, request 2400 bytes).
+
+---
+
+# Earlier history — TP Custom Rifle Parts fork
+
 
 This file documents the changes made in **this fork** (TP Custom Rifle Parts)
 on top of [WhoKilledBambiLabs/Opentrickler_ML](https://github.com/WhoKilledBambiLabs/Opentrickler_ML),

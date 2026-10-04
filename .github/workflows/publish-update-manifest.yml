@@ -40,6 +40,15 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Check that the release tag matches RELEASE_VERSION
+        run: |
+          VERSION="${{ github.event.inputs.version || github.event.release.tag_name || github.ref_name }}"
+          FILE_VERSION="$(tr -d '[:space:]' < RELEASE_VERSION)"
+          if [ "$VERSION" != "$FILE_VERSION" ]; then
+            echo "::error::Release version '$VERSION' does not match RELEASE_VERSION '$FILE_VERSION'. The device compares these strings literally."
+            exit 1
+          fi
+
       - name: Install build dependencies
         run: |
           sudo apt-get update

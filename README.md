@@ -20,6 +20,19 @@ Firmware for the OpenTrickler Raspberry Pi Pico 2 W / RP2350 controller, based o
 - Cleanup speed limited to +/-10 rps in 0.5 rps steps.
 - OTA update source defaults to this repository (`Bleach3D/OpenTrickler-Autotune`).
 
+## Versioning and releases
+
+Semantic Versioning (`vMAJOR.MINOR.PATCH`), see [CHANGELOG.md](CHANGELOG.md).
+The firmware shows its version under *Settings > Version* on the display and in the web UI.
+
+To release:
+1. Move the `[Unreleased]` entries in `CHANGELOG.md` under a new version heading.
+2. Put the same version (e.g. `v1.1.0`) into `RELEASE_VERSION` and commit.
+3. Tag that commit (`git tag -a v1.1.0 -m "v1.1.0"`) and push the tag.
+4. Publish a GitHub release for the tag. The *publish-update-manifest* workflow builds the
+   firmware and attaches `app.uf2`, `app.bin` and `manifest.json` (used by the on-device update check).
+   It refuses to run if the tag and `RELEASE_VERSION` differ.
+
 ---
 
 ## Original README (TP Custom Rifle Parts fork)
