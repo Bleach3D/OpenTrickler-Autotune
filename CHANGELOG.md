@@ -11,6 +11,20 @@ compares the version strings literally.
 
 ## [Unreleased]
 
+## [v1.1.0] — 2026-10-04
+
+### Added
+
+- **Charge Timeline** card on the Trickler page (below Start/Stop): weight over
+  time for the last charge with coarse / fine / settle phases, target and
+  tolerance band, handoff point and motor speed; a zoomed "Fine approach"
+  view of the last 3 gn showing motor stop, tail and final result; chips for
+  final weight, error, coarse and fine time. Updates live while charging.
+  "Last 5" overlays the previous charges (kept in the browser).
+- Firmware records each charge at 10 Hz (`charge_timeline.c`, decimates
+  automatically for long charges) and serves it at `/rest/charge_timeline`
+  (incremental via `id` / `gen` / `from`).
+
 ## [v1.0.0] — 2026-10-04
 
 Based on TP Custom Rifle Parts fork `v2026.09.23-fork.32` (commit `674afab`).

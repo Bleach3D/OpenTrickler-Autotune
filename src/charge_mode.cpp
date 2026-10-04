@@ -22,6 +22,7 @@
 #include "common.h"
 #include "servo_gate.h"
 #include "ai_tuning.h"
+#include "charge_timeline.h"
 
 
 uint8_t charge_weight_digits[] = {0, 0, 0, 0, 0};
@@ -247,6 +248,12 @@ static void charge_mode_command_motor(motor_select_t selected_motor, float new_v
     }
 
     motor_set_speed(selected_motor, new_velocity);
+}
+
+// Current motor commands (rps, tube side) for the charge timeline recorder.
+extern "C" void charge_mode_get_live_motor_commands(float *coarse_rps, float *fine_rps) {
+    if (coarse_rps) *coarse_rps = live_coarse_command_rps;
+    if (fine_rps) *fine_rps = live_fine_command_rps;
 }
 
 static void charge_mode_set_live_phase(const char* phase,
@@ -3670,6 +3677,9 @@ void charge_mode_wait_for_cup_removal() {
                                    : 0.0f,
                                result_tolerance);
 
+    // Close the charge timeline with the settled result
+    charge_timeline_finish(result_measurement_valid, result_measurement);
+
     // Deferred AI tuning recording - use settled measurement for accurate weight
     bool ai_characterization_recorded = false;
     if (ai_record_pending) {
@@ -3974,6 +3984,8 @@ uint8_t charge_mode_menu(bool charge_mode_skip_user_input) {
                 charge_mode_wait_for_zero();
                 break;
             case CHARGE_MODE_WAIT_FOR_COMPLETE:
+                charge_timeline_begin(charge_mode_config.target_charge_weight,
+                                      charge_mode_acceptance_tolerance());
                 charge_mode_wait_for_complete();
                 break;
             case CHARGE_MODE_STABILIZING:
@@ -3996,6 +4008,9 @@ uint8_t charge_mode_menu(bool charge_mode_skip_user_input) {
                 break;
         }
     }
+
+    // A charge left without reaching "Remove Cup" (reset / abort)
+    charge_timeline_abort();
 
     // Reset LED to default colour
     neopixel_led_set_colour(neopixel_led_config.eeprom_neopixel_led_metadata.default_led_colours.mini12864_backlight_colour,

@@ -3,6 +3,7 @@
 #include "rest_endpoints.h"
 #include "http_rest.h"
 #include "charge_mode.h"
+#include "charge_timeline.h"
 #include "motors.h"
 #include "scale.h"
 #include "wireless.h"
@@ -177,6 +178,7 @@ bool rest_endpoints_init(bool default_wizard) {
     rest_register_handler("/rest/charge_mode_config", http_rest_charge_mode_config);
     rest_register_handler("/rest/charge_mode_state", http_rest_charge_mode_state);
     rest_register_handler("/rest/cleanup_mode_state", http_rest_cleanup_mode_state);
+    rest_register_handler("/rest/charge_timeline", http_rest_charge_timeline);
     rest_register_handler("/rest/system_control", http_rest_system_control);
     rest_register_handler("/rest/coarse_motor_config", http_rest_coarse_motor_config);
     rest_register_handler("/rest/fine_motor_config", http_rest_fine_motor_config);

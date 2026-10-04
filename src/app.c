@@ -25,6 +25,7 @@
 #include "neopixel_led.h"
 #include "mini_12864_module.h"
 #include "menu.h"
+#include "charge_timeline.h"
 #include "profile.h"
 #include "servo_gate.h"
 
@@ -59,6 +60,9 @@ int main()
 
     // Initialize charge mode settings
     charge_mode_config_init();
+
+    // Charge timeline recorder (web UI "Charge Timeline" card)
+    charge_timeline_init();
 
     // Initialize the servo
     servo_gate_init();
