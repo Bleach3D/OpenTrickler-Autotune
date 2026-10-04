@@ -157,6 +157,9 @@ QueueHandle_t encoder_event_queue = NULL;
 
 ButtonEncoderEvent_t button_wait_for_input(bool block) { (void)block; return BUTTON_NO_EVENT; }
 
+// Normally in pid_autotune.cpp, which the simulator does not build.
+bool pid_autotune_is_active(void) { return false; }
+
 uint16_t swuart_calcCRC(uint8_t *data, size_t len) { (void)data; (void)len; return 0; }
 void busy_wait_us(uint64_t us) { vTaskDelay((TickType_t)(us / 1000)); }
 

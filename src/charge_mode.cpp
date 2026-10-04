@@ -23,6 +23,7 @@
 #include "servo_gate.h"
 #include "ai_tuning.h"
 #include "charge_timeline.h"
+#include "pid_autotune.h"
 
 
 uint8_t charge_weight_digits[] = {0, 0, 0, 0, 0};
@@ -4452,6 +4453,12 @@ bool http_rest_charge_mode_state(struct fs_file *file, int num_params, char *par
                     (void)xQueueSend(encoder_event_queue, &button_event, pdMS_TO_TICKS(250));
                 }
                 charge_mode_config.charge_mode_state = CHARGE_MODE_EXIT;
+            }
+            // PID Tuning owns the motors and the menu while it runs (or sits on
+            // its result screen); the OVERRIDE_FROM_REST below would only be
+            // swallowed by it and leave charge_mode_state claiming a charge.
+            else if (new_state == CHARGE_MODE_WAIT_FOR_ZERO && pid_autotune_is_active()) {
+                // ignored
             }
             // Enter
             else if (new_state == CHARGE_MODE_WAIT_FOR_ZERO) {

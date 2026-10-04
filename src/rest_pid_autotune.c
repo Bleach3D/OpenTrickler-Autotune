@@ -105,7 +105,7 @@ bool http_rest_pid_autotune_config(struct fs_file *file, int num_params, char *p
 
 
 static float clampf(float v, float lo, float hi) {
-    if (v < lo) return lo;
+    if (!(v >= lo)) return lo;      // also catches NaN, e.g. "?cup_capacity_gr=nan"
     if (v > hi) return hi;
     return v;
 }
@@ -176,7 +176,15 @@ bool http_rest_pid_autotune_start(struct fs_file *file, int num_params, char *pa
             "%s{\"success\":false,\"error\":\"ChargeInProgress\"}", http_json_header);
     }
     else {
-        exit_state = APP_STATE_ENTER_PID_AUTOTUNE_FROM_REST;
+        // Still on the previous run's result/error screen: that loop is the
+        // one OVERRIDE_FROM_REST wakes, and the menu resets exit_state as
+        // soon as pid_autotune_menu() returns, so ask it to loop instead.
+        if (pid_autotune_is_active()) {
+            pid_autotune_request_restart();
+        }
+        else {
+            exit_state = APP_STATE_ENTER_PID_AUTOTUNE_FROM_REST;
+        }
         ButtonEncoderEvent_t button_event = OVERRIDE_FROM_REST;
         if (encoder_event_queue != NULL) {
             (void)xQueueSend(encoder_event_queue, &button_event, pdMS_TO_TICKS(250));

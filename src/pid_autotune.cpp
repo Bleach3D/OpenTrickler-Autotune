@@ -33,6 +33,13 @@ static TaskHandle_t pid_autotune_render_task_handler = NULL;
 static TickType_t throw_start_tick = 0;
 static bool throw_running = false;
 static volatile bool abort_requested = false;
+// True from entry to exit of pid_autotune_menu(), including the result/error
+// screen it sits on afterwards waiting for RST or a REST exit.
+static volatile bool menu_active = false;
+// Set by a REST start that arrives while the result/error screen is still
+// up: the screen's wait loop exits and the run starts again, instead of the
+// OVERRIDE_FROM_REST it needs to wake that loop just dropping back to the menu.
+static volatile bool restart_requested = false;
 
 // Tail/margin constants. See fit_profile() for how these are used.
 #define PA_COARSE_STOP_MARGIN_GR     0.15f
@@ -601,7 +608,22 @@ void pid_autotune_request_abort(void) {
 }
 
 
+bool pid_autotune_is_active(void) {
+    return menu_active;
+}
+
+
+void pid_autotune_request_restart(void) {
+    restart_requested = true;
+}
+
+
 uint8_t pid_autotune_menu(void) {
+    menu_active = true;
+    restart_requested = false;
+
+  do {
+    restart_requested = false;
     pid_autotune.state = PID_AUTOTUNE_STATE_WAIT_FOR_ZERO;
     pid_autotune.throw_idx = 0;
     pid_autotune.current_speed = 0.0f;
@@ -749,6 +771,7 @@ uint8_t pid_autotune_menu(void) {
             if (ev == BUTTON_RST_PRESSED || ev == BUTTON_ENCODER_PRESSED || ev == OVERRIDE_FROM_REST) break;
         }
     }
+  } while (restart_requested);
 
     neopixel_led_set_colour(neopixel_led_config.eeprom_neopixel_led_metadata.default_led_colours.mini12864_backlight_colour,
                             neopixel_led_config.eeprom_neopixel_led_metadata.default_led_colours.led1_colour,
@@ -758,6 +781,7 @@ uint8_t pid_autotune_menu(void) {
     motor_enable(SELECT_COARSE_TRICKLER_MOTOR, false);
     motor_enable(SELECT_FINE_TRICKLER_MOTOR, false);
 
+    menu_active = false;
     exit_state = APP_STATE_DEFAULT;
     return 1;
 }

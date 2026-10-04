@@ -133,6 +133,8 @@ uint8_t pid_autotune_menu(void);
 
 bool pid_autotune_apply_to_profile(void);   // write the fitted values into the selected profile (RAM)
 void pid_autotune_request_abort(void);      // signal the running characterisation to stop
+bool pid_autotune_is_active(void);          // true while pid_autotune_menu() owns the device (run or result screen)
+void pid_autotune_request_restart(void);    // run again when the result/error screen is next woken
 
 // REST
 bool http_rest_pid_autotune_state(struct fs_file *file, int num_params, char *params[], char *values[]);
