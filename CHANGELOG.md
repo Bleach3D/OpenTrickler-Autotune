@@ -11,6 +11,42 @@ compares the version strings literally.
 
 ## [Unreleased]
 
+## [v1.2.0] — 2026-10-05
+
+### Added
+
+- **Basic / Advanced settings mode** (toggle in the settings header, remembered
+  per browser, Basic by default). Basic hides expert options; each page shows
+  "N advanced settings hidden · Show". Hidden fields keep their values and are
+  still sent unchanged with Apply.
+  - Profile page reorganised: name, controller, tolerance, decimal places,
+    Manual Finish and auto-zero up front; everything else in collapsible
+    groups (Stop Thresholds, PID Gains & Flow Speeds, Scale Settle,
+    Kernel/Cut Kernel/Reverse Tube, Pre-Charge & Pulse Mode, LED Colours).
+  - Motor, Neopixel LED and Servo Gate pages only in Advanced mode.
+  - AI Tuning (live details, safety guards, characterization settings, runtime
+    history), PID Tuning (safety margins and test settings; cup capacity stays
+    visible), Firmware Update (repository, manual OTA), System (IDs, VCS hash,
+    build type, Erase EEPROM) and Scale (serial format) partly in Advanced.
+  - Menu: "AI / PID Tuning" opens the page matching the profile's controller;
+    "Display & Buttons" and "System" renamed.
+- **Compact WiFi page:** saved networks as a list with "connected" marker and
+  whether a password is stored; inline edit, add, forget (now also for
+  network 1); WiFi on/off switch; security type and connect timeout in Advanced.
+  Firmware reports the joined slot (`cs`) and stored-password flags (`pk`).
+
+### Fixed
+
+- **REST parameters with `&` or `=` in a value** (e.g. WiFi passwords or SSIDs)
+  were split wrongly because the URI was percent-decoded before being split
+  into parameters. Parameters are now split first, then decoded one by one.
+- WiFi connect timeout over 65 s wrapped around (parsed as 16 bit); now
+  clamped to 5–120 s.
+
+### Removed
+
+- Leftover "Fork Build Marker" field from the TP fork on the System page.
+
 ## [v1.1.0] — 2026-10-04
 
 ### Added

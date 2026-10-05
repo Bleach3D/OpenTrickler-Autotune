@@ -1,4 +1,5 @@
 #include <pico/cyw43_arch.h>
+#include <stdlib.h>
 #include <FreeRTOS.h>
 #include <queue.h>
 
@@ -298,7 +299,10 @@ typedef struct {
     const char *ssid;
     const char *pw;
     uint8_t auth;
+    int8_t slot;            // 0 = network 1 (primary), 1..4 = additional
 } wireless_candidate_t;
+
+static int8_t wireless_connected_slot = -1;   // slot of the joined network, -1 if none
 
 static int16_t scan_best_rssi[WIRELESS_KNOWN_NETWORK_CNT];
 static wireless_candidate_t scan_candidates[WIRELESS_KNOWN_NETWORK_CNT];
@@ -350,6 +354,7 @@ static bool wireless_connect_known_networks(void) {
     for (int n = 0; n < WIRELESS_KNOWN_NETWORK_CNT; n++) {
         wireless_candidate_t c;
         if (wireless_get_known_network(n, &c)) {
+            c.slot = (int8_t) n;
             scan_candidates[scan_candidate_cnt] = c;
             scan_best_rssi[scan_candidate_cnt] = WIRELESS_RSSI_NOT_SEEN;
             scan_candidate_cnt++;
@@ -425,6 +430,7 @@ static bool wireless_connect_known_networks(void) {
                                                           remaining_ms);
             if (resp == PICO_OK) {
                 memset(second_line_buffer, 0x0, sizeof(second_line_buffer));
+                wireless_connected_slot = c->slot;
                 return true;
             }
             vTaskDelay(pdMS_TO_TICKS(250));
@@ -605,7 +611,7 @@ bool http_rest_wireless_config(struct fs_file *file, int num_params, char *param
     // x<n>s (str): ssid          (additional network n = 1..4)
     // x<n>p (str): pw            (additional network n, write only)
     // x<n>a (int): auth          (additional network n)
-    // xc (int): forget additional network n (1..4)
+    // xc (int): forget network slot n (0 = network 1, 1..4 = additional)
     // ee (bool): save to eeprom
 
     static char wireless_config_json_buffer[1024];
@@ -631,8 +637,10 @@ bool http_rest_wireless_config(struct fs_file *file, int num_params, char *param
             wireless_config.eeprom_wireless_metadata.auth = auth;
         }
         else if (strcmp(params[idx], "w3") == 0) {
-            int timeout_ms = (uint16_t) atoi(values[idx]);
-            wireless_config.eeprom_wireless_metadata.timeout_ms = timeout_ms;
+            long timeout_ms = strtol(values[idx], NULL, 10);
+            if (timeout_ms < 5000) timeout_ms = 5000;
+            if (timeout_ms > 120000) timeout_ms = 120000;
+            wireless_config.eeprom_wireless_metadata.timeout_ms = (uint32_t) timeout_ms;
         }
         else if (strcmp(params[idx], "w4") == 0) {
             bool enable = string_to_boolean(values[idx]);
@@ -640,7 +648,13 @@ bool http_rest_wireless_config(struct fs_file *file, int num_params, char *param
         }
         else if (strcmp(params[idx], "xc") == 0) {
             int n = atoi(values[idx]);
-            if (n >= 1 && n <= WIRELESS_EXTRA_NETWORK_CNT) {
+            if (n == 0) {
+                // Forget network 1 (the one the setup hotspot writes)
+                memset(wireless_config.eeprom_wireless_metadata.ssid, 0x00, sizeof(wireless_config.eeprom_wireless_metadata.ssid));
+                memset(wireless_config.eeprom_wireless_metadata.pw, 0x00, sizeof(wireless_config.eeprom_wireless_metadata.pw));
+                wireless_config.eeprom_wireless_metadata.auth = AUTH_WPA2_MIXED_PSK;
+            }
+            else if (n >= 1 && n <= WIRELESS_EXTRA_NETWORK_CNT) {
                 memset(&wireless_extra.networks[n - 1], 0x00, sizeof(wireless_extra.networks[n - 1]));
                 wireless_extra.networks[n - 1].auth = AUTH_WPA2_MIXED_PSK;
             }
@@ -705,6 +719,21 @@ bool http_rest_wireless_config(struct fs_file *file, int num_params, char *param
         len += snprintf(wireless_config_json_buffer + len, sizeof(wireless_config_json_buffer) - len,
                         ",\"x%ds\":\"%s\",\"x%da\":%d",
                         n + 1, escaped, n + 1, net->ssid[0] ? net->auth : AUTH_WPA2_MIXED_PSK);
+    }
+    // cs: slot of the network joined at boot (-1 = none / AP mode)
+    // pk: per slot whether a password is stored (the password itself is never sent)
+    if (len > 0 && (size_t) len < sizeof(wireless_config_json_buffer)) {
+        len += snprintf(wireless_config_json_buffer + len, sizeof(wireless_config_json_buffer) - len,
+                        ",\"cs\":%d,\"pk\":[%d",
+                        (int) wireless_connected_slot,
+                        wireless_config.eeprom_wireless_metadata.pw[0] != '\0');
+        for (int n = 0; n < WIRELESS_EXTRA_NETWORK_CNT && len > 0 && (size_t) len < sizeof(wireless_config_json_buffer); n++) {
+            len += snprintf(wireless_config_json_buffer + len, sizeof(wireless_config_json_buffer) - len,
+                            ",%d", wireless_extra.networks[n].pw[0] != '\0');
+        }
+        if (len > 0 && (size_t) len < sizeof(wireless_config_json_buffer)) {
+            len += snprintf(wireless_config_json_buffer + len, sizeof(wireless_config_json_buffer) - len, "]");
+        }
     }
     if (len > 0 && (size_t) len < sizeof(wireless_config_json_buffer) - 2) {
         wireless_config_json_buffer[len++] = '}';

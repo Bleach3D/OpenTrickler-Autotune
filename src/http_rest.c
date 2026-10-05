@@ -2849,11 +2849,13 @@ static err_t http_find_file(struct http_state * hs, const char * uri, int is_09)
     struct fs_file * file = NULL;
     char * params = NULL;
 
-    // The decoded URI will be fed to the parameter and REST handler loopup
-    // decoded_uri will be within the scope of `http_find_file` exclusively
+    // Work on a copy of the URI (it lives for the scope of `http_find_file`).
+    // Split off the parameters BEFORE percent-decoding: decoding first turned
+    // an encoded '&' or '=' inside a value (e.g. a WiFi password or SSID) into
+    // a separator, so the value was cut short or split into bogus parameters.
     char decoded_uri[strlen(uri) + 1];
     memset(decoded_uri, 0x0, sizeof(decoded_uri));
-    decode_uri(decoded_uri, uri);
+    strcpy(decoded_uri, uri);
 
     // First, isolate the base URI (without any parameters)
     params = (char *) strchr(decoded_uri, '?');
@@ -2863,12 +2865,25 @@ static err_t http_find_file(struct http_state * hs, const char * uri, int is_09)
         params += 1;
     }
 
+    // Decode the path for the handler lookup (in place; never grows)
+    decode_uri(decoded_uri, decoded_uri);
+
     // Look for handler
     rest_handler_t rest_handler = rest_get_handler(decoded_uri);
 
     if (rest_handler) {
         // Extract parameters from the uri
         http_cgi_paramcount = extract_uri_parameters(hs, params);
+
+        // Now decode each name and value on its own (in place)
+        for (int i = 0; i < http_cgi_paramcount; i++) {
+            if (hs->params[i] != NULL) {
+                decode_uri(hs->params[i], hs->params[i]);
+            }
+            if (hs->param_vals[i] != NULL) {
+                decode_uri(hs->param_vals[i], hs->param_vals[i]);
+            }
+        }
 
         rest_handler(&hs->file_handle, http_cgi_paramcount, hs->params, hs->param_vals);
         file = &hs->file_handle;

@@ -44,6 +44,12 @@
         .ct-axis text { font-size: 9px; fill: oklch(var(--bc) / 0.55); font-variant-numeric: tabular-nums; }
         .ct-grid line { stroke: oklch(var(--bc) / 0.08); }
 
+        /* Basic / Advanced settings mode (see setUiMode) */
+        html[data-ui-mode="basic"] .adv-only { display: none !important; }
+        html[data-ui-mode="advanced"] .basic-hint { display: none !important; }
+        .adv-tag { font-size: 9px; letter-spacing: .06em; font-weight: 700; padding: 1px 5px; border-radius: 4px; flex: none;
+                   background: oklch(var(--wa) / .18); color: oklch(var(--bc) / .75); border: 1px solid oklch(var(--wa) / .45); }
+
         /* Exclude the pixels taken by the bottom nav bar */
         .exclude-bottom-nav {
             padding-bottom: 64px;
@@ -329,7 +335,11 @@
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-6 h-6 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
                         </label>
                     </div>
-                    <div id="settingsSectionTitle" class="w-full px-2 mx-2">---</div>
+                    <div id="settingsSectionTitle" class="flex-1 px-2 mx-2">---</div>
+                    <div class="join flex-none mr-1">
+                        <button type="button" id="uiModeBasicBtn" class="btn btn-xs join-item" onclick="setUiMode('basic')">Basic</button>
+                        <button type="button" id="uiModeAdvBtn" class="btn btn-xs join-item" onclick="setUiMode('advanced')">Advanced</button>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 px-6 gap-2">
@@ -361,7 +371,7 @@
                                 </select>
                             </div>
 
-                            <div class="grid grid-cols-1 gap-1">
+                            <div class="grid grid-cols-1 gap-1 adv-only">
                                 <span class="label-text">Serial Format</span>
                                 <select class="select select-bordered" name="s2">
                                     <option value="0">8 data bits, 1 stop bit, no parity bit</option>
@@ -432,6 +442,12 @@
                             </select>
 
                             <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Profile Name</span>
+                                <input type="text" class="input input-bordered" name="p2" form="profileConfigForm" maxlength="15">
+                                <span class="label-text-alt opacity-70 ot-help">A name for this powder/load combination, up to 15 characters. Each profile keeps its own PID gains, speeds, thresholds and AI model, so use one profile per powder.</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
                                 <span class="label-text">Controller</span>
                                 <select class="select select-bordered" name="c27" onchange="onControllerChanged(this)">
                                     <option value="false">PID - Original OpenTrickler Firmware</option>
@@ -440,24 +456,10 @@
                                 <span class="label-text-alt opacity-70 ot-help">PID is the original OpenTrickler control loop and is recommended for normal use - it takes its stop points directly from your thresholds below. Adaptive is the legacy controller from <a class="link link-primary" href="https://github.com/WhoKilledBambiLabs/Opentrickler_ML" target="_blank" rel="noopener">Opentrickler_ML</a> that computes its own runtime stop margins; kept for reference/compatibility, not recommended.</span>
                             </div>
 
-
-
-
-                            <div id="legacyAdaptiveOptions" style="display:none;">
-                                <div class="divider text-sm">Legacy Adaptive Controller Options</div>
+                            <div id="legacyAdaptiveOptions" class="legacy-adaptive-only" style="display:none;">
                                 <div class="alert alert-warning py-2 text-sm mb-2">
-                                    <span>These two only affect the legacy adaptive controller. They do nothing while the Controller above is set to PID, because the PID path takes its stop points straight from your thresholds.</span>
+                                    <span>Only affects the legacy adaptive controller. Does nothing while the Controller above is set to PID.</span>
                                 </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Coarse Stop Authority</span>
-                                <select class="select select-bordered" name="c24">
-                                    <option value="false">Use my threshold above (recommended)</option>
-                                    <option value="true">Let AI tuning decide</option>
-                                </select>
-                                <span class="label-text-alt opacity-70 ot-help">Whether the legacy adaptive controller may choose its own coarse handoff point instead of using your threshold. No effect while the Controller is set to PID.</span>
-                                <span class="label-text-alt opacity-70">"Use my threshold" caps how much the AI leaves for the fine tube at handoff, so it can't quietly hand off several grains early. It is still raised automatically if the coarse motor physically needs more room to stop without overshooting &mdash; the live status line reports when that happens. "Let AI tuning decide" restores the fully adaptive behaviour.</span>
-                            </div>
                             <div class="grid grid-cols-1 gap-1">
                                 <span class="label-text">Accuracy vs Speed</span>
                                 <input type="range" class="range range-primary" name="c25" min="0" max="1" step="0.05" oninput="onAccuracySpeedSliderInput(this)" onchange="onAccuracySpeedCommit(this)">
@@ -472,61 +474,20 @@
                             </div>
 
                             <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Powder Kernel Weight <span class="ot-unit">grains</span></span>
-                                <div class="flex gap-2 items-center flex-wrap">
-                                    <input id="profileKernelWeightInput" type="number" step="0.001" min="0" placeholder="Measured kernel weight (gn)" class="input input-bordered input-sm w-48">
-                                    <button type="button" class="btn btn-primary btn-sm" onclick="onSaveKernelWeightClickedProfile()">Save</button>
-                                    <button type="button" id="profileKernelWeightClearBtn" class="btn btn-ghost btn-sm" style="display:none;" onclick="onClearKernelWeightClickedProfile()">Clear override</button>
-                                </div>
-                                <div id="profileKernelWeightStatus" class="text-xs opacity-70">-</div>
-                                <span class="label-text-alt opacity-70 ot-help">Weight of a single powder granule ("kernel"), in grains. AI Tuning estimates this automatically from characterization, but entering a value you measured yourself is more reliable and always overrides the estimate. Used as the floor for Fine Trickler Stop Threshold and for Manual Finish's suggested kernel count below. The same value is shown and edited here and on the AI Tuning page &mdash; there is only one stored value per profile.</span>
-                            </div>
-
-                            <div class="divider"></div>
-
-                            <div class="grid grid-cols-2 gap-1">
-                                <span class="label-text">Neopixel LED Normal Charge Colour</span>
-                                <input type="color" class="input w-full" name="c1">
-                                <span class="label-text-alt opacity-70 ot-help">Ring colour when the finished charge is inside your Accepted Charge Tolerance.</span>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-1">
-                                <span class="label-text">Neopixel LED Under Charge Colour</span>
-                                <input type="color" class="input w-full" name="c2">
-                                <span class="label-text-alt opacity-70 ot-help">Ring colour when the finished charge is below tolerance.</span>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-1">
-                                <span class="label-text">Neopixel LED Over Charge Colour</span>
-                                <input type="color" class="input w-full" name="c3">
-                                <span class="label-text-alt opacity-70 ot-help">Ring colour when the finished charge is above tolerance. Worth choosing something unmissable &mdash; an overcharge is the one you must not load.</span>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-1">
-                                <span class="label-text">Neopixel LED Not Ready Colour</span>
-                                <input type="color" class="input w-full" name="c4">
-                                <span class="label-text-alt opacity-70 ot-help">Ring colour while the system is not ready, for example waiting for the pan or for a stable zero.</span>
-                            </div>
-
-                            <div class="divider"></div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Coarse Trickler Stop Threshold <span class="ot-unit">grains</span></span>
-                                <input type="number" class="input input-bordered" name="c5" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">How much of the charge is left for the fine tube when the coarse tube stops. <b>Typical 0.5&ndash;1.5&nbsp;gn.</b> <b>Lower</b> = coarse runs longer, faster throws, but more risk it overshoots on its own momentum. <b>Higher</b> = safer against overshoot, but the fine tube has more work so throws take longer and vary more. If throws are slow, lower this first. Must stay above the coarse tube's measured tail, or the coarse tube will carry past target after it stops.</span>
-                            </div>
-
-
-                            <div class="grid grid-cols-1 gap-1">
                                 <span class="label-text">Accepted Charge Tolerance <span class="ot-unit">&plusmn; grains</span></span>
                                 <input type="number" class="input input-bordered" name="c26" step="0.001" min="0.005">
                                 <span class="label-text-alt opacity-70 ot-help">The &plusmn; band that decides whether a finished charge is <b>accepted (green)</b> or flagged under/over. This is also the band the controller works to: it keeps topping up while the charge is more than this under target, so it will not hand you a short charge and call it done. <b>Typical 0.02&ndash;0.04&nbsp;gn.</b> <b>Lower</b> = tighter charges, longer throws. <b>Higher</b> = faster, looser. Cannot go finer than about half a scale count (FX-120i resolves ~0.0154&nbsp;gn).</span>
                             </div>
 
-                            <div class="divider text-sm">Manual Finish</div>
-                            <div class="alert alert-info py-2 text-sm mb-2">
-                                <span>For large-kernel powders (e.g. N565/N570-class extruded stick powder, ~0.08gn per kernel) where your Accepted Charge Tolerance is tighter than one whole kernel. The trickler cannot safely add another full kernel without risking an overcharge, so instead of guessing it stops, blinks the under-charge LED, and tells you how many hand-cut partial kernels to drop in. It then verifies and goes green or red exactly like an automatic finish.</span>
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Decimal Places</span>
+                                <select class="select select-bordered" name="c9">
+                                    <option value="0">2</option>
+                                    <option value="1">3</option>
+                                </select>
+                                <span class="label-text-alt opacity-70 ot-help">Display resolution on the device screen. Cosmetic only &mdash; it does not change control precision. An FX-120i resolves about 0.0154&nbsp;gn, so the third decimal is finer than the scale can actually see.</span>
                             </div>
+
                             <div class="grid grid-cols-1 gap-1">
                                 <span class="label-text">Manual Finish</span>
                                 <select class="select select-bordered" name="c28" onchange="onManualFinishChanged(this)">
@@ -535,12 +496,6 @@
                                 </select>
                                 <span class="label-text-alt opacity-70 ot-help">Needs a known kernel weight for this profile &mdash; either AI-estimated from characterization or entered by hand on the AI Tuning page. Without one, this setting has nothing to compare against and does nothing.</span>
                             </div>
-                            <div id="manualFinishCutKernelRow" class="grid grid-cols-1 gap-1" style="display:none;">
-                                <span class="label-text">Cut Kernel Weight <span class="ot-unit">grains</span></span>
-                                <input type="number" class="input input-bordered" name="c29" step="0.001" min="0">
-                                <span class="label-text-alt opacity-70 ot-help">The weight of one hand-cut fragment. If a whole kernel is 0.08gn and you cut it in half, enter 0.04; cut into quarters, enter 0.02. The suggested count shown on the trickler and here is simply the remaining gap divided by this number, rounded to the nearest whole fragment. Leave at 0 to fall back to suggesting whole kernels, which only tells you the gap rather than helping close it.</span>
-                            </div>
-
                             <div id="manualFinishBanner" class="alert py-3 mb-2" style="display:none; background: color-mix(in oklch, oklch(var(--wa)) 22%, oklch(var(--b1))); border-color: oklch(var(--wa));">
                                 <div class="w-full">
                                     <div class="font-semibold text-base flex items-center gap-2">
@@ -551,7 +506,172 @@
                                 </div>
                             </div>
 
-                            <div class="divider text-sm">Reverse Tube</div>
+                            <div class="grid grid-cols-2 gap-1">
+                                <span class="label-text">Auto-Zero Scale on Cup Return</span>
+                                <select class="select select-bordered" name="c17">
+                                    <option value="true">Yes</option>
+                                    <option value="false">No</option>
+                                </select>
+                                <span class="label-text-alt opacity-70 ot-help">Automatically tares the scale when you put the empty pan back. Saves a button press each cycle. Turn off if your pan seats inconsistently, since an auto-tare on a badly seated pan puts a hidden offset into the next charge.</span>
+                            </div>
+
+                            <div class="divider my-0 text-xs opacity-70 adv-only">Advanced</div>
+
+                            <details class="collapse collapse-arrow bg-base-200 rounded-box adv-only ">
+                                <summary class="collapse-title text-sm font-semibold"><span class="flex items-center gap-2 w-full pr-2"><span>Stop Thresholds &amp; Authority</span><span class="text-xs font-normal opacity-60 ml-auto whitespace-nowrap">3 settings</span></span></summary>
+                                <div class="collapse-content grid grid-cols-1 gap-3 pt-1">
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Coarse Trickler Stop Threshold <span class="ot-unit">grains</span></span>
+                                <input type="number" class="input input-bordered" name="c5" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">How much of the charge is left for the fine tube when the coarse tube stops. <b>Typical 0.5&ndash;1.5&nbsp;gn.</b> <b>Lower</b> = coarse runs longer, faster throws, but more risk it overshoots on its own momentum. <b>Higher</b> = safer against overshoot, but the fine tube has more work so throws take longer and vary more. If throws are slow, lower this first. Must stay above the coarse tube's measured tail, or the coarse tube will carry past target after it stops.</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Fine Trickler Stop Threshold <span class="ot-unit">grains</span></span>
+                                <input type="number" class="input input-bordered" name="c6" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">How close to target counts as done for the fine tube &mdash; it stops once the remaining weight is under this. <b>Typical 0.02&ndash;0.05&nbsp;gn.</b> <b>Lower</b> = tighter charges but more time creeping, and more chance of tipping into an overcharge. <b>Higher</b> = quicker, consistently a touch light. <b>Do not set below your powder kernel weight</b> &mdash; asking for 0.01&nbsp;gn from a 0.04&nbsp;gn granule is asking for something the hardware cannot deliver.</span>
+                            </div>
+
+                                <div class="legacy-adaptive-only" style="display:none;">
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Coarse Stop Authority</span>
+                                <select class="select select-bordered" name="c24">
+                                    <option value="false">Use my threshold above (recommended)</option>
+                                    <option value="true">Let AI tuning decide</option>
+                                </select>
+                                <span class="label-text-alt opacity-70 ot-help">Whether the legacy adaptive controller may choose its own coarse handoff point instead of using your threshold. No effect while the Controller is set to PID.</span>
+                                <span class="label-text-alt opacity-70">"Use my threshold" caps how much the AI leaves for the fine tube at handoff, so it can't quietly hand off several grains early. It is still raised automatically if the coarse motor physically needs more room to stop without overshooting &mdash; the live status line reports when that happens. "Let AI tuning decide" restores the fully adaptive behaviour.</span>
+                            </div>
+                                </div>
+                                </div>
+                            </details>
+
+                            <details class="collapse collapse-arrow bg-base-200 rounded-box adv-only ">
+                                <summary class="collapse-title text-sm font-semibold"><span class="flex items-center gap-2 w-full pr-2"><span>PID Gains &amp; Flow Speeds</span><span class="text-xs font-normal opacity-60 ml-auto whitespace-nowrap">10 settings</span></span></summary>
+                                <div class="collapse-content grid grid-cols-1 gap-3 pt-1">
+                        <div class="alert alert-info py-2 text-sm mb-2">
+                            <span>Only used while the Controller above is set to PID &mdash; the recommended and default path. Switching to the legacy Adaptive controller computes its own runtime margins instead.</span>
+                        </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Coarse Trickler Kp</span>
+                                <input type="number" class="input input-bordered" name="p3" form="profileConfigForm" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">How hard the coarse tube reacts to how far you are from target. Speed = Kp &times; remaining weight. <b>Suggested value comes from measured flow: Kp = 1/(&tau;&middot;k).</b> <b>Raise</b> for a faster, more aggressive coarse run; too high and it slams to max speed then overshoots the handoff. <b>Lower</b> for a gentler ramp that costs a few seconds. Symptom of too high: coarse repeatedly blows past the stop threshold. Symptom of too low: coarse crawls and the throw drags.</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Coarse Trickler Ki</span>
+                                <input type="number" class="input input-bordered" name="p4" form="profileConfigForm" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">Integral term &mdash; accumulates leftover error over time to grind out a steady offset. <b>Suggested 0, and 0 is usually right.</b> The coarse phase is short and ends well short of target, so there is no steady-state error worth correcting, and any wind-up carries straight into an overshoot. Only add a very small value (0.001&ndash;0.01) if coarse consistently stalls short of the handoff.</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Coarse Trickler Kd</span>
+                                <input type="number" class="input input-bordered" name="p5" form="profileConfigForm" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">Derivative term &mdash; reacts to how fast the weight is changing. <b>Suggested 0, and 0 is strongly recommended on an A&amp;D FX-120i.</b> The scale quantises to ~0.0154&nbsp;gn, so the rate signal is mostly quantisation steps; a derivative term amplifies that into speed jitter. Leave at 0 unless you have a much faster, finer scale.</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Coarse Trickler Min Flow Speed (rps)</span>
+                                <input type="number" class="input input-bordered" name="p6" form="profileConfigForm" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">Slowest the coarse tube is allowed to turn. Below a certain speed a stepper stalls or delivers erratically, so this is a floor, not a target. <b>Raise</b> if the coarse tube stutters or stalls near the end of its run. <b>Lower</b> for a gentler approach to handoff. Suggested value is the measured trim speed from characterization.</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Coarse Trickler Max Flow Speed (rps)</span>
+                                <input type="number" class="input input-bordered" name="p7" form="profileConfigForm" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">Fastest the coarse tube may turn. This sets how quickly bulk powder is delivered and is the main lever on total throw time. <b>Raise</b> for faster throws, but a faster tube has more momentum and a bigger tail, so the coarse stop threshold must grow to match. <b>Lower</b> if you see overshoot past the handoff that raising the stop threshold cannot fix.</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Fine Trickler Kp</span>
+                                <input type="number" class="input input-bordered" name="p8" form="profileConfigForm" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">How hard the fine tube reacts to remaining weight. This is the gain that decides your final accuracy and the length of the last few seconds. <b>Raise</b> to close the last fraction of a grain quicker, at the risk of overshooting past target. <b>Lower</b> for a slower, safer creep. If you regularly go over by a small amount, lower this before touching anything else.</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Fine Trickler Ki</span>
+                                <input type="number" class="input input-bordered" name="p9" form="profileConfigForm" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">Integral term for the fine tube. <b>Suggested 0.</b> The fine phase is the long one, so this is where wind-up does real damage: error accumulates while the scale lags, then dumps extra powder just as you reach target. Leave at 0 unless the fine tube reliably stalls just short of target, and then only 0.001&ndash;0.005.</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Fine Trickler Kd</span>
+                                <input type="number" class="input input-bordered" name="p10" form="profileConfigForm" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">Derivative term for the fine tube. <b>Suggested 0 and best left there.</b> Same reason as coarse Kd, but worse: near target the real weight change per reading is around one scale count, so a derivative term is reacting almost entirely to quantisation noise.</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Fine Trickler Min Flow Speed (rps)</span>
+                                <input type="number" class="input input-bordered" name="p11" form="profileConfigForm" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">Slowest the fine tube may turn &mdash; effectively your finest possible delivery rate, and therefore a hard limit on accuracy. <b>Lower</b> for finer control right at target, until the motor starts stalling or delivering in unpredictable clumps. <b>Raise</b> if the last stretch takes too long or the tube stalls.</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Fine Trickler Max Flow Speed (rps)</span>
+                                <input type="number" class="input input-bordered" name="p12" form="profileConfigForm" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">Fastest the fine tube may turn. Sets how quickly the gap left by the coarse tube is closed. <b>Raise</b> to shorten the fine phase, but the tail grows with speed so the fine stop threshold must grow too. <b>Lower</b> for a calmer finish. If throws are slow, raising the coarse stop threshold usually helps more than raising this.</span>
+                            </div>
+                                </div>
+                            </details>
+
+                            <details class="collapse collapse-arrow bg-base-200 rounded-box adv-only ">
+                                <summary class="collapse-title text-sm font-semibold"><span class="flex items-center gap-2 w-full pr-2"><span>Scale Settle</span><span class="text-xs font-normal opacity-60 ml-auto whitespace-nowrap">4 settings</span></span></summary>
+                                <div class="collapse-content grid grid-cols-1 gap-3 pt-1">
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Scale Settle &mdash; Stability (SD) <span class="ot-unit">grains</span></span>
+                                <input type="number" class="input input-bordered" name="c7" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">Not an accuracy target despite the old name. This is how still the scale must be before a reading is trusted: the standard deviation across the last few readings must fall below it. <b>Typical 0.01&ndash;0.03&nbsp;gn.</b> <b>Lower</b> = waits for a calmer scale, slower but more repeatable. <b>Higher</b> = accepts readings sooner, faster but noise can be mistaken for powder. Raise it on a draughty or vibrating bench; lower it if results scatter.</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Scale Settle &mdash; Zero Band (Mean) <span class="ot-unit">grains</span></span>
+                                <input type="number" class="input input-bordered" name="c8" step="0.001">
+                                <span class="label-text-alt opacity-70 ot-help">How close to zero the pan must average before the system accepts it as tared and ready. <b>Typical 0.02&ndash;0.05&nbsp;gn.</b> <b>Lower</b> insists on a truer zero but can hang at &quot;waiting for zero&quot; if the scale drifts. <b>Higher</b> starts sooner but carries a small offset into the charge. This does not decide whether a finished charge is good &mdash; that is Accepted Charge Tolerance.</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Fixed Stabilization Wait</span>
+                                <select class="select select-bordered" name="c22">
+                                    <option value="true">Yes (fixed time)</option>
+                                    <option value="false">No (adaptive SD-based)</option>
+                                </select>
+                                <span class="label-text-alt opacity-70 ot-help">How long to wait after the motors stop before reading the final weight. <b>Fixed</b> waits a set time every throw &mdash; predictable and simple. <b>Adaptive</b> watches the reading and continues once it is genuinely stable, which is usually quicker but varies throw to throw.</span>
+                                <span class="text-xs text-gray-500">ON = fixed wait time; OFF = adaptive SD-based (up to 3s)</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Stabilization Time (ms)</span>
+                                <input type="number" class="input input-bordered" name="c23" step="100" min="200" max="5000">
+                                <span class="label-text-alt opacity-70 ot-help">The fixed settling wait, used only when the mode above is set to Fixed. <b>Longer</b> = more trustworthy final figure, slower cycle. On an FX-120i, under about 1000&nbsp;ms risks recording a value the scale has not finished settling on.</span>
+                                <span class="text-xs text-gray-500">Fixed wait after motors stop (used when fixed stabilization is ON)</span>
+                            </div>
+                                </div>
+                            </details>
+
+                            <details class="collapse collapse-arrow bg-base-200 rounded-box adv-only ">
+                                <summary class="collapse-title text-sm font-semibold"><span class="flex items-center gap-2 w-full pr-2"><span>Kernel Weight, Cut Kernel &amp; Reverse Tube</span><span class="text-xs font-normal opacity-60 ml-auto whitespace-nowrap">6 settings</span></span></summary>
+                                <div class="collapse-content grid grid-cols-1 gap-3 pt-1">
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Powder Kernel Weight <span class="ot-unit">grains</span></span>
+                                <div class="flex gap-2 items-center flex-wrap">
+                                    <input id="profileKernelWeightInput" type="number" step="0.001" min="0" placeholder="Measured kernel weight (gn)" class="input input-bordered input-sm w-48">
+                                    <button type="button" class="btn btn-primary btn-sm" onclick="onSaveKernelWeightClickedProfile()">Save</button>
+                                    <button type="button" id="profileKernelWeightClearBtn" class="btn btn-ghost btn-sm" style="display:none;" onclick="onClearKernelWeightClickedProfile()">Clear override</button>
+                                </div>
+                                <div id="profileKernelWeightStatus" class="text-xs opacity-70">-</div>
+                                <span class="label-text-alt opacity-70 ot-help">Weight of a single powder granule ("kernel"), in grains. AI Tuning estimates this automatically from characterization, but entering a value you measured yourself is more reliable and always overrides the estimate. Used as the floor for Fine Trickler Stop Threshold and for Manual Finish's suggested kernel count below. The same value is shown and edited here and on the AI Tuning page &mdash; there is only one stored value per profile.</span>
+                            </div>
+
+                            <div class="alert alert-info py-2 text-sm mb-2">
+                                <span>For large-kernel powders (e.g. N565/N570-class extruded stick powder, ~0.08gn per kernel) where your Accepted Charge Tolerance is tighter than one whole kernel. The trickler cannot safely add another full kernel without risking an overcharge, so instead of guessing it stops, blinks the under-charge LED, and tells you how many hand-cut partial kernels to drop in. It then verifies and goes green or red exactly like an automatic finish.</span>
+                            </div>
+                            <div id="manualFinishCutKernelRow" class="grid grid-cols-1 gap-1" style="display:none;">
+                                <span class="label-text">Cut Kernel Weight <span class="ot-unit">grains</span></span>
+                                <input type="number" class="input input-bordered" name="c29" step="0.001" min="0">
+                                <span class="label-text-alt opacity-70 ot-help">The weight of one hand-cut fragment. If a whole kernel is 0.08gn and you cut it in half, enter 0.04; cut into quarters, enter 0.02. The suggested count shown on the trickler and here is simply the remaining gap divided by this number, rounded to the nearest whole fragment. Leave at 0 to fall back to suggesting whole kernels, which only tells you the gap rather than helping close it.</span>
+                            </div>
+
                             <div class="alert alert-info py-2 text-sm mb-2">
                                 <span>After a tube's own final stop for this charge, briefly runs that motor backwards to pull the last bit of powder back out of the tube/gate instead of letting it keep dribbling in after the scale has already been read. Configured separately for the coarse and fine tubes since they hold very different amounts of residual powder. Has no effect on aborted charges.</span>
                             </div>
@@ -581,36 +701,12 @@
                                 <input type="number" class="input input-bordered" name="c33" step="0.01" min="0" max="10">
                                 <span class="label-text-alt opacity-70 ot-help">How far to run the fine motor backwards, in motor revolutions. <b>Typical 0.02&ndash;0.15</b> &mdash; the fine tube usually needs much less than the coarse tube. Runs at the tube's own configured Fine Trickler Min Flow Speed. Too much can pull powder back past the gate; start small.</span>
                             </div>
+                                </div>
+                            </details>
 
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Fine Trickler Stop Threshold <span class="ot-unit">grains</span></span>
-                                <input type="number" class="input input-bordered" name="c6" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">How close to target counts as done for the fine tube &mdash; it stops once the remaining weight is under this. <b>Typical 0.02&ndash;0.05&nbsp;gn.</b> <b>Lower</b> = tighter charges but more time creeping, and more chance of tipping into an overcharge. <b>Higher</b> = quicker, consistently a touch light. <b>Do not set below your powder kernel weight</b> &mdash; asking for 0.01&nbsp;gn from a 0.04&nbsp;gn granule is asking for something the hardware cannot deliver.</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Scale Settle &mdash; Stability (SD) <span class="ot-unit">grains</span></span>
-                                <input type="number" class="input input-bordered" name="c7" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">Not an accuracy target despite the old name. This is how still the scale must be before a reading is trusted: the standard deviation across the last few readings must fall below it. <b>Typical 0.01&ndash;0.03&nbsp;gn.</b> <b>Lower</b> = waits for a calmer scale, slower but more repeatable. <b>Higher</b> = accepts readings sooner, faster but noise can be mistaken for powder. Raise it on a draughty or vibrating bench; lower it if results scatter.</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Scale Settle &mdash; Zero Band (Mean) <span class="ot-unit">grains</span></span>
-                                <input type="number" class="input input-bordered" name="c8" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">How close to zero the pan must average before the system accepts it as tared and ready. <b>Typical 0.02&ndash;0.05&nbsp;gn.</b> <b>Lower</b> insists on a truer zero but can hang at &quot;waiting for zero&quot; if the scale drifts. <b>Higher</b> starts sooner but carries a small offset into the charge. This does not decide whether a finished charge is good &mdash; that is Accepted Charge Tolerance.</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Decimal Places</span>
-                                <select class="select select-bordered" name="c9">
-                                    <option value="0">2</option>
-                                    <option value="1">3</option>
-                                </select>
-                                <span class="label-text-alt opacity-70 ot-help">Display resolution on the device screen. Cosmetic only &mdash; it does not change control precision. An FX-120i resolves about 0.0154&nbsp;gn, so the third decimal is finer than the scale can actually see.</span>
-                            </div>
-
-                            <div class="divider"></div>
-
+                            <details class="collapse collapse-arrow bg-base-200 rounded-box adv-only ">
+                                <summary class="collapse-title text-sm font-semibold"><span class="flex items-center gap-2 w-full pr-2"><span>Pre-Charge &amp; Pulse Mode</span><span class="text-xs font-normal opacity-60 ml-auto whitespace-nowrap">8 settings</span></span></summary>
+                                <div class="collapse-content grid grid-cols-1 gap-3 pt-1">
                             <div class="grid grid-cols-1 gap-1">
                                 <span class="label-text">Enable Pre-Charge (requires servo gate)</span>
                                 <select class="select select-bordered" name="c10">
@@ -636,19 +732,6 @@
                                 <input type="number" class="input input-bordered" name="c13" step="0.001" min="0" max="1">
                                 <span class="label-text-alt opacity-70 ot-help">Where the servo gate sits during the main trickling stages, 0 fully open to 1 fully closed. Partly closing restricts flow for a steadier trickle. Tune by eye: enough opening to keep powder moving without surging.</span>
                             </div>
-
-                            <div class="divider"></div>
-
-                            <div class="grid grid-cols-2 gap-1">
-                                <span class="label-text">Auto-Zero Scale on Cup Return</span>
-                                <select class="select select-bordered" name="c17">
-                                    <option value="true">Yes</option>
-                                    <option value="false">No</option>
-                                </select>
-                                <span class="label-text-alt opacity-70 ot-help">Automatically tares the scale when you put the empty pan back. Saves a button press each cycle. Turn off if your pan seats inconsistently, since an auto-tare on a badly seated pan puts a hidden offset into the next charge.</span>
-                            </div>
-
-                            <div class="divider">Pulse Mode</div>
 
                             <div class="grid grid-cols-1 gap-1">
                                 <span class="label-text">Enable Pulse Mode</span>
@@ -680,102 +763,44 @@
                                 <span class="label-text-alt opacity-70 ot-help">Pause between pulses, giving the scale time to settle so the next decision uses a real reading rather than powder still in flight. <b>Too short is the classic cause of overshoot in pulse mode.</b> On an FX-120i start around 250&ndash;400&nbsp;ms. Raise it if you overshoot in pulse mode; lower it only if the finish feels needlessly slow.</span>
                                 <span class="text-xs text-gray-500">Wait time for scale to update between pulses</span>
                             </div>
+                                </div>
+                            </details>
 
-                            <div class="divider text-sm">Scale Stabilization</div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Fixed Stabilization Wait</span>
-                                <select class="select select-bordered" name="c22">
-                                    <option value="true">Yes (fixed time)</option>
-                                    <option value="false">No (adaptive SD-based)</option>
-                                </select>
-                                <span class="label-text-alt opacity-70 ot-help">How long to wait after the motors stop before reading the final weight. <b>Fixed</b> waits a set time every throw &mdash; predictable and simple. <b>Adaptive</b> watches the reading and continues once it is genuinely stable, which is usually quicker but varies throw to throw.</span>
-                                <span class="text-xs text-gray-500">ON = fixed wait time; OFF = adaptive SD-based (up to 3s)</span>
+                            <details class="collapse collapse-arrow bg-base-200 rounded-box adv-only ">
+                                <summary class="collapse-title text-sm font-semibold"><span class="flex items-center gap-2 w-full pr-2"><span>LED Colours</span><span class="text-xs font-normal opacity-60 ml-auto whitespace-nowrap">4 settings</span></span></summary>
+                                <div class="collapse-content grid grid-cols-1 gap-3 pt-1">
+                            <div class="grid grid-cols-2 gap-1">
+                                <span class="label-text">Neopixel LED Normal Charge Colour</span>
+                                <input type="color" class="input w-full" name="c1">
+                                <span class="label-text-alt opacity-70 ot-help">Ring colour when the finished charge is inside your Accepted Charge Tolerance.</span>
                             </div>
 
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Stabilization Time (ms)</span>
-                                <input type="number" class="input input-bordered" name="c23" step="100" min="200" max="5000">
-                                <span class="label-text-alt opacity-70 ot-help">The fixed settling wait, used only when the mode above is set to Fixed. <b>Longer</b> = more trustworthy final figure, slower cycle. On an FX-120i, under about 1000&nbsp;ms risks recording a value the scale has not finished settling on.</span>
-                                <span class="text-xs text-gray-500">Fixed wait after motors stop (used when fixed stabilization is ON)</span>
+                            <div class="grid grid-cols-2 gap-1">
+                                <span class="label-text">Neopixel LED Under Charge Colour</span>
+                                <input type="color" class="input w-full" name="c2">
+                                <span class="label-text-alt opacity-70 ot-help">Ring colour when the finished charge is below tolerance.</span>
                             </div>
+
+                            <div class="grid grid-cols-2 gap-1">
+                                <span class="label-text">Neopixel LED Over Charge Colour</span>
+                                <input type="color" class="input w-full" name="c3">
+                                <span class="label-text-alt opacity-70 ot-help">Ring colour when the finished charge is above tolerance. Worth choosing something unmissable &mdash; an overcharge is the one you must not load.</span>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-1">
+                                <span class="label-text">Neopixel LED Not Ready Colour</span>
+                                <input type="color" class="input w-full" name="c4">
+                                <span class="label-text-alt opacity-70 ot-help">Ring colour while the system is not ready, for example waiting for the pan or for a stable zero.</span>
+                            </div>
+                                </div>
+                            </details>
 
                             <button class="btn btn-neutral settings-apply-btn">Apply</button>
                         </form>
 
-                        <div class="divider">PID Gains</div>
-                        <div class="alert alert-info py-2 text-sm mb-2">
-                            <span>Only used while the Controller above is set to PID &mdash; the recommended and default path. Switching to the legacy Adaptive controller computes its own runtime margins instead.</span>
-                        </div>
-                        <form id="profileConfigForm" action="/rest/profile_config" class="grid grid-cols-1 gap-3">
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Profile Name</span>
-                                <input type="text" class="input input-bordered" name="p2" maxlength="15">
-                                <span class="label-text-alt opacity-70 ot-help">A name for this powder/load combination, up to 15 characters. Each profile keeps its own PID gains, speeds, thresholds and AI model, so use one profile per powder.</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Coarse Trickler Kp</span>
-                                <input type="number" class="input input-bordered" name="p3" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">How hard the coarse tube reacts to how far you are from target. Speed = Kp &times; remaining weight. <b>Suggested value comes from measured flow: Kp = 1/(&tau;&middot;k).</b> <b>Raise</b> for a faster, more aggressive coarse run; too high and it slams to max speed then overshoots the handoff. <b>Lower</b> for a gentler ramp that costs a few seconds. Symptom of too high: coarse repeatedly blows past the stop threshold. Symptom of too low: coarse crawls and the throw drags.</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Coarse Trickler Ki</span>
-                                <input type="number" class="input input-bordered" name="p4" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">Integral term &mdash; accumulates leftover error over time to grind out a steady offset. <b>Suggested 0, and 0 is usually right.</b> The coarse phase is short and ends well short of target, so there is no steady-state error worth correcting, and any wind-up carries straight into an overshoot. Only add a very small value (0.001&ndash;0.01) if coarse consistently stalls short of the handoff.</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Coarse Trickler Kd</span>
-                                <input type="number" class="input input-bordered" name="p5" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">Derivative term &mdash; reacts to how fast the weight is changing. <b>Suggested 0, and 0 is strongly recommended on an A&amp;D FX-120i.</b> The scale quantises to ~0.0154&nbsp;gn, so the rate signal is mostly quantisation steps; a derivative term amplifies that into speed jitter. Leave at 0 unless you have a much faster, finer scale.</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Coarse Trickler Min Flow Speed (rps)</span>
-                                <input type="number" class="input input-bordered" name="p6" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">Slowest the coarse tube is allowed to turn. Below a certain speed a stepper stalls or delivers erratically, so this is a floor, not a target. <b>Raise</b> if the coarse tube stutters or stalls near the end of its run. <b>Lower</b> for a gentler approach to handoff. Suggested value is the measured trim speed from characterization.</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Coarse Trickler Max Flow Speed (rps)</span>
-                                <input type="number" class="input input-bordered" name="p7" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">Fastest the coarse tube may turn. This sets how quickly bulk powder is delivered and is the main lever on total throw time. <b>Raise</b> for faster throws, but a faster tube has more momentum and a bigger tail, so the coarse stop threshold must grow to match. <b>Lower</b> if you see overshoot past the handoff that raising the stop threshold cannot fix.</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Fine Trickler Kp</span>
-                                <input type="number" class="input input-bordered" name="p8" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">How hard the fine tube reacts to remaining weight. This is the gain that decides your final accuracy and the length of the last few seconds. <b>Raise</b> to close the last fraction of a grain quicker, at the risk of overshooting past target. <b>Lower</b> for a slower, safer creep. If you regularly go over by a small amount, lower this before touching anything else.</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Fine Trickler Ki</span>
-                                <input type="number" class="input input-bordered" name="p9" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">Integral term for the fine tube. <b>Suggested 0.</b> The fine phase is the long one, so this is where wind-up does real damage: error accumulates while the scale lags, then dumps extra powder just as you reach target. Leave at 0 unless the fine tube reliably stalls just short of target, and then only 0.001&ndash;0.005.</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Fine Trickler Kd</span>
-                                <input type="number" class="input input-bordered" name="p10" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">Derivative term for the fine tube. <b>Suggested 0 and best left there.</b> Same reason as coarse Kd, but worse: near target the real weight change per reading is around one scale count, so a derivative term is reacting almost entirely to quantisation noise.</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Fine Trickler Min Flow Speed (rps)</span>
-                                <input type="number" class="input input-bordered" name="p11" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">Slowest the fine tube may turn &mdash; effectively your finest possible delivery rate, and therefore a hard limit on accuracy. <b>Lower</b> for finer control right at target, until the motor starts stalling or delivering in unpredictable clumps. <b>Raise</b> if the last stretch takes too long or the tube stalls.</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Fine Trickler Max Flow Speed (rps)</span>
-                                <input type="number" class="input input-bordered" name="p12" step="0.001">
-                                <span class="label-text-alt opacity-70 ot-help">Fastest the fine tube may turn. Sets how quickly the gap left by the coarse tube is closed. <b>Raise</b> to shorten the fine phase, but the tail grows with speed so the fine stop threshold must grow too. <b>Lower</b> for a calmer finish. If throws are slow, raising the coarse stop threshold usually helps more than raising this.</span>
-                            </div>
-
-                            <button class="btn btn-neutral settings-apply-btn">Apply</button>
-                        </form>
+                        <!-- Name and PID gains live inside the page above and are tied to this
+                             form with form="profileConfigForm"; the form itself stays empty. -->
+                        <form id="profileConfigForm" action="/rest/profile_config" class="hidden"></form>
                     </section>
 
 
@@ -783,167 +808,40 @@
 
                     <!-- Wireless Settings -->
                     <section class="settings-page" id="settings-wireless" name="Wireless" style="display: none;">
-                        <form id="wirelessConfigForm" action="/rest/wireless_config" class="grid grid-cols-1 gap-3">
-                            <div class="divider my-0">Network 1</div>
+                        <div class="grid grid-cols-1 gap-3">
+                            <label class="flex items-center justify-between gap-3 bg-base-200 rounded-box px-3 py-3 cursor-pointer">
+                                <span>
+                                    <span class="font-medium">WiFi</span>
+                                    <span class="block text-xs opacity-60">On: joins the strongest saved network. Off, or if none connects: opens the setup hotspot.</span>
+                                </span>
+                                <input id="wifiEnableToggle" type="checkbox" class="toggle toggle-success" onchange="wifiSetEnabled(this)">
+                            </label>
 
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">WiFi SSID</span>
-                                <input type="text" class="input input-bordered" name="w0" maxlength="32">
+                            <div class="flex items-center justify-between -mb-1">
+                                <span class="text-sm font-semibold">Saved networks</span>
+                                <span id="wifiCount" class="text-xs opacity-60"></span>
                             </div>
+                            <div id="wifiList" class="bg-base-200 rounded-box"></div>
+                            <button id="wifiAddBtn" type="button" class="btn btn-outline btn-sm" onclick="wifiEdit(-1)">+ Add network</button>
+                            <div id="wifiStatus" class="text-xs opacity-70">Changes are saved right away and take effect after a reboot.</div>
 
-                            <div class="grid grid-cols-1 gap-1">
-                                <div>
-                                    <div class="badge badge-neutral">Write Only</div>
-                                    <span class="label-text">WiFi Password</span> 
-                                </div>
-                                <input type="password" class="input input-bordered" name="w1" maxlength="63" placeholder="********">
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">WiFi Authentication Method</span>
-                                <select class="select select-bordered" name="w2">
-                                    <option value="0">None</option>
-                                    <option value="1">WPA-TKIP</option>
-                                    <option value="2">WPA2-AES</option>
-                                    <option value="3">WPA2-MIXED</option>
-                                </select>
-                            </div>
-
-                            <div class="divider my-0">Network 2</div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">WiFi SSID</span>
+                            <div class="divider my-0 text-xs opacity-70 adv-only">Advanced</div>
+                            <div class="grid grid-cols-1 gap-1 adv-only">
+                                <span class="label-text">Connect timeout per network</span>
                                 <div class="flex gap-2">
-                                    <input type="text" class="input input-bordered flex-1 min-w-0" name="x1s" maxlength="31" placeholder="not set">
-                                    <button type="button" class="btn btn-outline" onclick="forgetWifiNetwork(1)">Forget</button>
+                                    <label class="input input-bordered flex items-center gap-2 flex-1">
+                                        <input id="wifiTimeoutInput" type="number" min="5" max="120" step="1" class="grow">
+                                        <span class="text-xs opacity-60">s</span>
+                                    </label>
+                                    <button type="button" class="btn btn-neutral" onclick="wifiSaveTimeout()">Save</button>
                                 </div>
+                                <span class="label-text-alt opacity-70 ot-help">How long to try each network before moving on. Networks the boot scan did not see get at most 10 s.</span>
                             </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <div>
-                                    <div class="badge badge-neutral">Write Only</div>
-                                    <span class="label-text">WiFi Password</span>
-                                </div>
-                                <input type="password" class="input input-bordered" name="x1p" maxlength="63" placeholder="********">
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">WiFi Authentication Method</span>
-                                <select class="select select-bordered" name="x1a">
-                                    <option value="0">None</option>
-                                    <option value="1">WPA-TKIP</option>
-                                    <option value="2">WPA2-AES</option>
-                                    <option value="3">WPA2-MIXED</option>
-                                </select>
-                            </div>
-
-                            <div class="divider my-0">Network 3</div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">WiFi SSID</span>
-                                <div class="flex gap-2">
-                                    <input type="text" class="input input-bordered flex-1 min-w-0" name="x2s" maxlength="31" placeholder="not set">
-                                    <button type="button" class="btn btn-outline" onclick="forgetWifiNetwork(2)">Forget</button>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <div>
-                                    <div class="badge badge-neutral">Write Only</div>
-                                    <span class="label-text">WiFi Password</span>
-                                </div>
-                                <input type="password" class="input input-bordered" name="x2p" maxlength="63" placeholder="********">
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">WiFi Authentication Method</span>
-                                <select class="select select-bordered" name="x2a">
-                                    <option value="0">None</option>
-                                    <option value="1">WPA-TKIP</option>
-                                    <option value="2">WPA2-AES</option>
-                                    <option value="3">WPA2-MIXED</option>
-                                </select>
-                            </div>
-
-                            <div class="divider my-0">Network 4</div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">WiFi SSID</span>
-                                <div class="flex gap-2">
-                                    <input type="text" class="input input-bordered flex-1 min-w-0" name="x3s" maxlength="31" placeholder="not set">
-                                    <button type="button" class="btn btn-outline" onclick="forgetWifiNetwork(3)">Forget</button>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <div>
-                                    <div class="badge badge-neutral">Write Only</div>
-                                    <span class="label-text">WiFi Password</span>
-                                </div>
-                                <input type="password" class="input input-bordered" name="x3p" maxlength="63" placeholder="********">
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">WiFi Authentication Method</span>
-                                <select class="select select-bordered" name="x3a">
-                                    <option value="0">None</option>
-                                    <option value="1">WPA-TKIP</option>
-                                    <option value="2">WPA2-AES</option>
-                                    <option value="3">WPA2-MIXED</option>
-                                </select>
-                            </div>
-
-                            <div class="divider my-0">Network 5</div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">WiFi SSID</span>
-                                <div class="flex gap-2">
-                                    <input type="text" class="input input-bordered flex-1 min-w-0" name="x4s" maxlength="31" placeholder="not set">
-                                    <button type="button" class="btn btn-outline" onclick="forgetWifiNetwork(4)">Forget</button>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <div>
-                                    <div class="badge badge-neutral">Write Only</div>
-                                    <span class="label-text">WiFi Password</span>
-                                </div>
-                                <input type="password" class="input input-bordered" name="x4p" maxlength="63" placeholder="********">
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">WiFi Authentication Method</span>
-                                <select class="select select-bordered" name="x4a">
-                                    <option value="0">None</option>
-                                    <option value="1">WPA-TKIP</option>
-                                    <option value="2">WPA2-AES</option>
-                                    <option value="3">WPA2-MIXED</option>
-                                </select>
-                            </div>
-
-                            <div class="divider my-0">General</div>
-
-                            <div class="text-xs opacity-70 ot-help">On boot the trickler scans and joins the strongest network from this list that it can see. Networks it cannot see (for example hidden SSIDs) are tried afterwards in list order. If none connect it opens its own setup hotspot. To remove a network use Forget; clearing the SSID field alone does not delete it.</div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">WiFi Attempt to Connect Timeout (ms)</span>
-                                <input type="number" class="input input-bordered" name="w3" step="1000">
-                            </div>
-
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Enable WiFi</span>
-                                <select class="select select-bordered" name="w4">
-                                    <option value="true">Yes</option>
-                                    <option value="false">No</option>
-                                </select>
-                            </div>
-
-                            <button class="btn btn-neutral settings-apply-btn">Apply</button>
-                        </form>
+                        </div>
                     </section>
 
                     <!-- Coarse Trickler Motor Settings -->
-                    <section class="settings-page" id="settings-coarse-motor" name="Coarse Trickler Motor" style="display: none;">
+                    <section class="settings-page adv-only" id="settings-coarse-motor" name="Coarse Trickler Motor" style="display: none;">
                         <form id="coarseMotorConfigForm" action="/rest/coarse_motor_config" class="grid grid-cols-1 gap-3">
                             <div role="alert" class="alert alert-info text-sm">
                                 <span>Physical target: coarse tube should rotate counter-clockwise. Change "Inverted Step Direction Pin" if the test run moves the wrong way.</span>
@@ -1019,7 +917,7 @@
                     </section>
 
                     <!-- Fine Trickler motor Settings -->
-                    <section class="settings-page" id="settings-fine-motor" name="Fine Trickler Motor" style="display: none;">
+                    <section class="settings-page adv-only" id="settings-fine-motor" name="Fine Trickler Motor" style="display: none;">
                         <form id="fineMotorConfigForm" action="/rest/fine_motor_config" class="grid grid-cols-1 gap-3">
                             <div role="alert" class="alert alert-info text-sm">
                                 <span>Physical target: fine tube should rotate clockwise. Change "Inverted Step Direction Pin" if the test run moves the wrong way.</span>
@@ -1095,7 +993,7 @@
                     </section>
 
                     <!-- Neopxiel LED Settings -->
-                    <section class="settings-page" id="settings-neopixel-led" name="Neopixel LED" style="display: none;">
+                    <section class="settings-page adv-only" id="settings-neopixel-led" name="Neopixel LED" style="display: none;">
                         <form id="neopixelLedConfigForm" action="/rest/neopixel_led_config" class="grid grid-cols-1 gap-3">
                             <div role="alert" class="alert">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -1162,7 +1060,7 @@
                     </section>
 
                     <!-- Mini 12864 Module Settings -->
-                    <section class="settings-page" id="settings-mini-12864-module" name="Mini 12864 Module" style="display: none;">
+                    <section class="settings-page" id="settings-mini-12864-module" name="Display &amp; Buttons" style="display: none;">
                         <form id="mini12864ModuleConfigForm" action="/rest/mini_12864_config" class="grid grid-cols-1 gap-3">
                             <div class="grid grid-cols-1 gap-1">
                                 <span class="label-text">Inverted Rotary Button Direction</span>
@@ -1184,7 +1082,7 @@
                         </form>
                     </section>
 
-                    <section class="settings-page" id="settings-servo-gate" name="Servo Gate" style="display: none;">
+                    <section class="settings-page adv-only" id="settings-servo-gate" name="Servo Gate" style="display: none;">
                         <form id="servoGateConfigForm" action="/rest/servo_gate_config" class="grid grid-cols-1 gap-3">
                             <div class="grid grid-cols-1 gap-1">
                                 <span class="label-text">Servo Gate Enable</span>
@@ -1335,7 +1233,7 @@
                             <button id="aiTuningApplyBtn" class="btn btn-success w-full" onclick="aiTuningApply()" disabled>Save Learned Model</button>
                             <span class="label-text-alt opacity-70 ot-help">Stores the characterization result on this profile. For PID gains and stop thresholds, use the dedicated PID Tuning page instead.</span>
 
-                            <details class="collapse collapse-arrow bg-base-200 rounded-box">
+                            <details class="collapse collapse-arrow bg-base-200 rounded-box adv-only">
                                 <summary class="collapse-title font-medium">Advanced Live Details</summary>
                                 <div class="collapse-content grid grid-cols-1 gap-3 pt-2">
                                     <div class="divider">Current Plan</div>
@@ -1449,7 +1347,7 @@
                                 </div>
                             </details>
 
-                            <details class="collapse collapse-arrow bg-base-200 rounded-box">
+                            <details class="collapse collapse-arrow bg-base-200 rounded-box adv-only">
                                 <summary class="collapse-title font-medium">Runtime Safety Guards</summary>
                                 <div class="collapse-content grid grid-cols-1 gap-3 pt-2">
                                     <div class="alert alert-info py-2 text-sm">
@@ -1485,7 +1383,7 @@
                                 </div>
                             </details>
 
-                            <details class="collapse collapse-arrow bg-base-200 rounded-box">
+                            <details class="collapse collapse-arrow bg-base-200 rounded-box adv-only">
                                 <summary class="collapse-title font-medium">Characterization Settings</summary>
                                 <div class="collapse-content grid grid-cols-1 gap-3 pt-2">
                                     <div class="grid grid-cols-2 gap-2">
@@ -1547,7 +1445,7 @@
                                 </div>
                             </details>
 
-                            <div id="aiRuntimeHistorySection">
+                            <div id="aiRuntimeHistorySection" class="adv-only">
                                 <div class="divider">Runtime History</div>
                                 <div class="flex justify-between items-center">
                                     <span class="text-sm text-gray-500">Saved runtime observations</span>
@@ -1589,6 +1487,12 @@
                                 <input id="paTimeGoalS" type="number" step="0.5" min="1" max="60" class="input input-bordered">
                             </div>
 
+                            <div class="grid grid-cols-1 gap-1">
+                                <span class="label-text">Cup Capacity (grains)</span>
+                                <input id="paCupCapacityGr" type="number" step="1" min="20" max="2000" class="input input-bordered">
+                            </div>
+
+                            <div class="adv-only grid grid-cols-1 gap-3">
                             <div class="divider">Safety Margins</div>
                             <div class="grid grid-cols-1 gap-1">
                                 <span class="label-text">Coarse Stop Safety (x scatter)</span>
@@ -1620,12 +1524,10 @@
                                         <span class="label-text">Fine Speed Ceiling (rps)</span>
                                         <input id="paFineSpeedCeiling" type="number" step="0.05" min="0.05" max="10" class="input input-bordered">
                                     </div>
-                                    <div class="grid grid-cols-1 gap-1">
-                                        <span class="label-text">Cup Capacity (grains)</span>
-                                        <input id="paCupCapacityGr" type="number" step="1" min="20" max="2000" class="input input-bordered">
-                                    </div>
                                 </div>
                             </details>
+
+                            </div>
 
                             <button id="paSaveConfigBtn" class="btn btn-neutral w-full" onclick="savePidAutotuneConfig()">Save Settings</button>
 
@@ -1719,7 +1621,7 @@
                                         and installs it over WiFi. No PC or cable needed.
                                     </p>
 
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 adv-only">
                                         <div class="grid grid-cols-1 gap-1">
                                             <span class="label-text">GitHub Owner / Org</span>
                                             <input type="text" class="input input-bordered" id="updateConfigOwner" placeholder="Bleach3D">
@@ -1729,7 +1631,7 @@
                                             <input type="text" class="input input-bordered" id="updateConfigRepo" placeholder="OpenTrickler-Autotune">
                                         </div>
                                     </div>
-                                    <div class="flex gap-2">
+                                    <div class="flex gap-2 adv-only">
                                         <button class="btn btn-neutral" onclick="saveUpdateConfig()">Save Repository</button>
                                     </div>
 
@@ -1766,7 +1668,7 @@
                                 </div>
                             </div>
 
-                            <details class="collapse collapse-arrow bg-base-200">
+                            <details class="collapse collapse-arrow bg-base-200 adv-only">
                                 <summary class="collapse-title text-sm font-medium">Advanced: manual OTA (for troubleshooting)</summary>
                                 <div class="collapse-content">
                                     <div class="alert alert-info">
@@ -1807,9 +1709,9 @@
                     </section>
 
                     <!-- System Control Page -->
-                    <section class="settings-page" id="settings-system-control" name="System Control" style="display: none;">
+                    <section class="settings-page" id="settings-system-control" name="System" style="display: none;">
                         <form id="systemControlForm" action="/rest/system_control" class="grid grid-cols-1 gap-3">
-                            <div class="grid grid-cols-1 gap-1">
+                            <div class="grid grid-cols-1 gap-1 adv-only">
                                 <span class="label-text">Unique ID</span>
                                 <input type="text" class="input input-bordered" name="s0" disabled="disabled" readonly>
                             </div>
@@ -1819,18 +1721,13 @@
                                 <input type="text" class="input input-bordered" name="s1" disabled="disabled" readonly>
                             </div>
 
-                            <div class="grid grid-cols-1 gap-1">
-                                <span class="label-text">Fork Build Marker</span>
-                                <input type="text" class="input input-bordered" value="TP-fork-2026-09-21-tls-github-direct-ota" disabled="disabled" readonly>
-                                <span class="label-text-alt opacity-70 ot-help">Identifies exactly which build of this fork is running, independent of the firmware version/VCS hash above. Useful when confirming a freshly flashed .uf2 actually took effect.</span>
-                            </div>
 
-                            <div class="grid grid-cols-1 gap-1">
+                            <div class="grid grid-cols-1 gap-1 adv-only">
                                 <span class="label-text">VCS Hash</span>
                                 <input type="text" class="input input-bordered" name="s2" disabled="disabled" readonly>
                             </div>
 
-                            <div class="grid grid-cols-1 gap-1">
+                            <div class="grid grid-cols-1 gap-1 adv-only">
                                 <span class="label-text">Build Type</span>
                                 <input type="text" class="input input-bordered" name="s3" disabled="disabled" readonly>
                             </div>
@@ -1854,7 +1751,7 @@
                                 </select>
                             </div>
 
-                            <div class="grid grid-cols-1 gap-1">
+                            <div class="grid grid-cols-1 gap-1 adv-only">
                                 <div>
                                     <div class="badge badge-warning">Warning</div>
                                     <span class="label-text">Erase EEPROM</span> 
@@ -1887,15 +1784,14 @@
                     <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-scale')">Scale</a></li>
                     <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-profile')">Profile</a></li>
                     <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-wireless')">Wireless</a></li>
-                    <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-coarse-motor')">Coarse Motor</a></li>
-                    <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-fine-motor')">Fine Motor</a></li>
-                    <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-neopixel-led')">Neopixel LED</a></li>
-                    <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-mini-12864-module')">Mini 12864 Module</a></li>
-                    <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-servo-gate')">Servo Gate</a></li>
+                    <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-mini-12864-module')">Display &amp; Buttons</a></li>
+                    <li class="adv-only"><a class="text-lg flex justify-between" onclick="onSettingsLinkClicked('settings-coarse-motor')">Coarse Trickler Motor<span class="adv-tag">ADV</span></a></li>
+                    <li class="adv-only"><a class="text-lg flex justify-between" onclick="onSettingsLinkClicked('settings-fine-motor')">Fine Trickler Motor<span class="adv-tag">ADV</span></a></li>
+                    <li class="adv-only"><a class="text-lg flex justify-between" onclick="onSettingsLinkClicked('settings-neopixel-led')">Neopixel LED<span class="adv-tag">ADV</span></a></li>
+                    <li class="adv-only"><a class="text-lg flex justify-between" onclick="onSettingsLinkClicked('settings-servo-gate')">Servo Gate<span class="adv-tag">ADV</span></a></li>
+                    <li><a class="text-lg" onclick="onTuningMenuClicked()">AI / PID Tuning</a></li>
                     <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-firmware-update')">Firmware Update</a></li>
-                    <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-system-control')">System Control</a></li>
-                    <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-ai-tuning')">AI Tuning</a></li>
-                    <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-pid-autotune')">PID Tuning</a></li>
+                    <li><a class="text-lg" onclick="onSettingsLinkClicked('settings-system-control')">System</a></li>
                 </ul>
             </div>
         </div>
@@ -2094,6 +1990,7 @@
 
 <!-- Scripts to support the webapp -->
 <script>
+    try { document.documentElement.setAttribute("data-ui-mode", localStorage.getItem("ot_ui_mode") === "advanced" ? "advanced" : "basic"); } catch (e) { document.documentElement.setAttribute("data-ui-mode", "basic"); }
 
 const ChargeModeState = Object.freeze({
         EXIT: 0,
@@ -2858,6 +2755,11 @@ const ChargeModeState = Object.freeze({
             pollPidAutotuneState();
             _startPaPoll();
         }
+        else if (sectionId === 'settings-wireless') {
+            _stopAiHistoryPoll();
+            _stopPaPoll();
+            wifiLoad();
+        }
         else if (sectionId === 'settings-firmware-update') {
             _stopAiHistoryPoll();
             _stopPaPoll();
@@ -2883,7 +2785,7 @@ const ChargeModeState = Object.freeze({
                 .then(r => r.json())
                 .then(data => {
                     for (const key in data) {
-                        const el = profileForm.querySelector('[name="' + key + '"]');
+                        const el = formField(profileForm, key);
                         if (el) el.value = String(data[key]);
                     }
                 })
@@ -2894,7 +2796,7 @@ const ChargeModeState = Object.freeze({
                 .then(r => r.json())
                 .then(data => {
                     for (const key in data) {
-                        const el = chargeForm.querySelector('[name="' + key + '"]');
+                        const el = formField(chargeForm, key);
                         if (el) el.value = String(data[key]);
                     }
                     refreshAccuracySpeedLabel();
@@ -2926,7 +2828,7 @@ const ChargeModeState = Object.freeze({
                 .then(data => {
                     // Populate the form
                     for (const key in data) {
-                        const element = form.querySelector('[name="' + key + '"]');
+                        const element = formField(form, key);
                         if (element) {
                             element.value = String(data[key]);
                         }
@@ -2958,7 +2860,7 @@ const ChargeModeState = Object.freeze({
             setProfileStatusMessage(`Active profile ${profileIdx} saved as the reboot default.`, 'success');
             // Populate the form
             for (const key in data) {
-                const element = form.querySelector('[name="' + key + '"]');
+                const element = formField(form, key);
                 if (element) {
                     element.value = String(data[key]);
                 }
@@ -3000,7 +2902,7 @@ const ChargeModeState = Object.freeze({
             }
             // Populate the form
             for (const key in data) {
-                const element = form.querySelector('[name="' + key + '"]');
+                const element = formField(form, key);
                 if (element) {
                     element.value = String(data[key]);
                 }
@@ -3049,8 +2951,8 @@ const ChargeModeState = Object.freeze({
 
     function onControllerChanged(el) {
         const isAdaptive = String(el.value) === 'true';
-        const block = document.getElementById('legacyAdaptiveOptions');
-        if (block) block.style.display = isAdaptive ? 'block' : 'none';
+        document.querySelectorAll('.legacy-adaptive-only')
+            .forEach(b => { b.style.display = isAdaptive ? 'block' : 'none'; });
         // Live feedback on the bottom-nav shortcut while editing -- this
         // select always reflects the active profile, so it's safe to
         // reflect immediately rather than waiting for Apply/Save.
@@ -3460,24 +3362,230 @@ const ChargeModeState = Object.freeze({
         .catch(() => {});
     }
 
-    // Remove one of the additional WiFi networks (2-5) and save to EEPROM.
-    function forgetWifiNetwork(n) {
-        const form = document.getElementById('wirelessConfigForm');
-        const ssidEl = form ? form.querySelector('[name="x' + n + 's"]') : null;
-        const label = ssidEl && ssidEl.value ? '"' + ssidEl.value + '"' : 'network ' + (n + 1);
-        if (!confirm('Forget ' + label + '? This is saved to EEPROM immediately.')) return;
-        fetch('/rest/wireless_config?xc=' + n + '&ee=true')
+    // Look up a field of a form by name, including fields that are placed
+    // elsewhere in the page and tied to the form with form="..." (the Profile
+    // page keeps the name and PID gains inside its grouped layout that way).
+    function formField(form, key) {
+        if (!form) return null;
+        const el = form.elements ? form.elements.namedItem(key) : null;
+        if (el && !(typeof RadioNodeList !== 'undefined' && el instanceof RadioNodeList)) return el;
+        return form.querySelector('[name="' + key + '"]');
+    }
+
+    // =======================================================================
+    // Basic / Advanced settings mode
+    // =======================================================================
+    // Elements marked .adv-only are hidden in Basic mode (CSS). Hidden fields
+    // keep their values and are still submitted unchanged with Apply.
+    function _getUiMode() {
+        try { return localStorage.getItem('ot_ui_mode') === 'advanced' ? 'advanced' : 'basic'; }
+        catch (e) { return 'basic'; }
+    }
+    function applyUiMode() {
+        const mode = _getUiMode();
+        document.documentElement.setAttribute('data-ui-mode', mode);
+        const b = document.getElementById('uiModeBasicBtn');
+        const a = document.getElementById('uiModeAdvBtn');
+        if (b) b.classList.toggle('btn-active', mode === 'basic');
+        if (a) { a.classList.toggle('btn-active', mode === 'advanced'); a.classList.toggle('btn-warning', mode === 'advanced'); }
+    }
+    function setUiMode(mode) {
+        try { localStorage.setItem('ot_ui_mode', mode); } catch (e) {}
+        applyUiMode();
+        // Leaving an advanced-only page when switching to Basic
+        if (mode === 'basic') {
+            const open = [...document.querySelectorAll('.settings-page')].find(sec => sec.style.display !== 'none');
+            if (open && open.classList.contains('adv-only')) onSettingsLinkClicked('settings-profile');
+        }
+        if (document.getElementById('settings-wireless') && _wifi) wifiRender();
+    }
+    // "N advanced settings hidden - Show" line on each page that has some
+    function initAdvHints() {
+        document.querySelectorAll('.settings-page:not(.adv-only)').forEach(sec => {
+            const advEls = [...sec.querySelectorAll('.adv-only')].filter(el => !el.parentElement.closest('.adv-only'));
+            if (!advEls.length) return;
+            const names = new Set();
+            let unnamed = 0;
+            advEls.forEach(el => el.querySelectorAll('input, select, textarea').forEach(f => {
+                if (f.type === 'hidden' || f.type === 'checkbox' && !f.name && !f.id) return;
+                if (f.name) names.add(f.name); else unnamed++;
+            }));
+            const n = names.size + unnamed;
+            const hint = document.createElement('div');
+            hint.className = 'basic-hint flex items-center justify-between rounded-box border border-dashed border-base-300 px-3 py-2 text-sm';
+            hint.innerHTML = `<span class="opacity-70">${n > 0 ? n + ' advanced setting' + (n === 1 ? '' : 's') + ' hidden' : 'Advanced details hidden'}</span>` +
+                             `<button type="button" class="btn btn-xs btn-ghost" onclick="setUiMode('advanced')">Show</button>`;
+            advEls[0].parentElement.insertBefore(hint, advEls[0]);
+        });
+    }
+    // One menu entry for both tuning pages: open the one that matches the
+    // active profile's controller (same rule as the bottom-nav button).
+    function onTuningMenuClicked() {
+        onSettingsLinkClicked(_activeControllerIsAdaptive ? 'settings-ai-tuning' : 'settings-pid-autotune');
+    }
+
+    // =======================================================================
+    // Wireless: compact list of saved networks (up to 5)
+    // =======================================================================
+    // Slot 0 is network 1 (w0/w1/w2, also written by the setup hotspot),
+    // slots 1..4 are the additional networks (x<n>s / x<n>p / x<n>a).
+    const WIFI_AUTH_NAMES = ['Open', 'WPA-TKIP', 'WPA2-AES', 'WPA2 Mixed'];
+    let _wifi = null;
+    let _wifiEditing = null;    // slot being edited, -1 = new network, null = none
+
+    function _esc(t) {
+        return String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    function wifiSlots(d) {
+        const pk = Array.isArray(d.pk) ? d.pk : [];
+        const out = [{ slot: 0, ssid: d.w0 || '', auth: Number(d.w2), pk: !!pk[0] }];
+        const n = Number(d.xn) || 4;
+        for (let i = 1; i <= n; i++) {
+            out.push({ slot: i, ssid: d['x' + i + 's'] || '', auth: Number(d['x' + i + 'a']), pk: !!pk[i] });
+        }
+        return out;
+    }
+    function wifiMsg(text, isError) {
+        const el = document.getElementById('wifiStatus');
+        if (!el) return;
+        el.innerText = text;
+        el.className = 'text-xs ' + (isError ? 'text-error' : 'opacity-70');
+    }
+    function wifiLoad() {
+        _wifiEditing = null;
+        fetch('/rest/wireless_config')
         .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-        .then(data => {
-            if (data.error) throw new Error(data.error);
-            for (const key in data) {
-                const el = form.querySelector('[name="' + key + '"]');
-                if (el) el.value = String(data[key]);
-            }
-            const pw = form.querySelector('[name="x' + n + 'p"]');
-            if (pw) pw.value = '';
-        })
-        .catch(e => alert('Failed to forget network: ' + e.message));
+        .then(d => { _wifi = d; wifiRender(); })
+        .catch(e => wifiMsg('Failed to load WiFi settings: ' + e.message, true));
+    }
+    function wifiRequest(params) {
+        params.ee = 'true';
+        return fetch('/rest/wireless_config?' + new URLSearchParams(params).toString())
+        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(d => { if (d.error) throw new Error(d.error); _wifi = d; return d; });
+    }
+
+    function _wifiIcon(connected) {
+        return `<svg class="w-5 h-5 shrink-0 ${connected ? 'text-success' : 'opacity-50'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5 12.6a10 10 0 0 1 14 0"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>`;
+    }
+    function _wifiEditPanel(net, isNew) {
+        const auth = isNew ? 3 : net.auth;
+        const opts = WIFI_AUTH_NAMES.map((n, i) => `<option value="${i}" ${i === auth ? 'selected' : ''}>${n}${i === 3 ? ' (default)' : ''}</option>`).join('');
+        const pwPlaceholder = (!isNew && net.pk) ? 'unchanged' : 'password';
+        return `
+            <div class="${isNew ? '' : 'border-t border-base-300'} px-3 py-3 grid gap-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-semibold">${isNew ? 'Add network' : 'Edit network'}</span>
+                </div>
+                <input id="wifiEditSsid" class="input input-bordered input-sm" maxlength="31" placeholder="Network name (SSID)" value="${isNew ? '' : _esc(net.ssid)}">
+                <label class="input input-bordered input-sm flex items-center gap-2">
+                    <input id="wifiEditPw" class="grow" type="password" maxlength="63" placeholder="${pwPlaceholder}" autocomplete="new-password">
+                    <span class="text-xs opacity-60">password</span>
+                </label>
+                <div class="flex items-center gap-2 adv-only">
+                    <span class="text-xs opacity-70 w-16">Security</span>
+                    <select id="wifiEditAuth" class="select select-bordered select-xs flex-1">${opts}</select>
+                    <span class="adv-tag">ADV</span>
+                </div>
+                <div class="flex gap-2 pt-1">
+                    <button type="button" class="btn btn-sm btn-neutral flex-1" onclick="wifiSaveEdit()">Save</button>
+                    <button type="button" class="btn btn-sm btn-ghost" onclick="wifiEdit(null)">Cancel</button>
+                    ${isNew ? '' : `<button type="button" class="btn btn-sm btn-ghost text-error" onclick="wifiForget(${net.slot})">Forget</button>`}
+                </div>
+            </div>`;
+    }
+    function wifiRender() {
+        const list = document.getElementById('wifiList');
+        if (!list || !_wifi) return;
+        const toggle = document.getElementById('wifiEnableToggle');
+        if (toggle) toggle.checked = String(_wifi.w4) === 'true';
+        const tIn = document.getElementById('wifiTimeoutInput');
+        if (tIn && document.activeElement !== tIn) tIn.value = Math.round(Number(_wifi.w3) / 1000) || '';
+
+        const slots = wifiSlots(_wifi);
+        const saved = slots.filter(n => n.ssid);
+        const cs = Number(_wifi.cs);
+        let html = '';
+        saved.forEach((net, i) => {
+            const connected = net.slot === cs;
+            const sec = net.auth === 0 ? 'Open' : `${WIFI_AUTH_NAMES[net.auth] || 'WPA2'} &middot; ${net.pk ? 'password saved' : 'no password'}`;
+            html += `
+            <div class="flex items-center gap-3 px-3 py-2 ${i ? 'border-t border-base-300' : ''}">
+                ${_wifiIcon(connected)}
+                <div class="flex-1 min-w-0">
+                    <div class="font-medium truncate">${_esc(net.ssid)}</div>
+                    <div class="text-xs opacity-60">${sec}</div>
+                </div>
+                ${connected ? '<span class="badge badge-success badge-sm">connected</span>' : ''}
+                <button type="button" class="btn btn-ghost btn-xs" onclick="wifiEdit(${net.slot})">Edit</button>
+            </div>`;
+            if (_wifiEditing === net.slot) html += _wifiEditPanel(net, false);
+        });
+        if (_wifiEditing === -1) html += (saved.length ? '<div class="border-t border-base-300"></div>' : '') + _wifiEditPanel(null, true);
+        if (!saved.length && _wifiEditing !== -1) {
+            html = '<div class="px-3 py-4 text-sm opacity-70">No networks saved yet.</div>';
+        }
+        list.innerHTML = html;
+
+        const free = slots.length - saved.length;
+        document.getElementById('wifiCount').innerText = `${saved.length} of ${slots.length}`;
+        const add = document.getElementById('wifiAddBtn');
+        add.disabled = free <= 0 || _wifiEditing !== null;
+        add.innerText = free > 0 ? '+ Add network' : 'All network slots used';
+        const ssidIn = document.getElementById('wifiEditSsid');
+        if (ssidIn && _wifiEditing === -1) ssidIn.focus();
+    }
+    function wifiEdit(slot) {
+        _wifiEditing = slot;
+        wifiRender();
+    }
+    function wifiSaveEdit() {
+        const ssid = document.getElementById('wifiEditSsid').value.trim();
+        const pw = document.getElementById('wifiEditPw').value;
+        let auth = Number(document.getElementById('wifiEditAuth').value);
+        if (!ssid) { wifiMsg('Enter the network name.', true); return; }
+        const slots = wifiSlots(_wifi);
+        let slot = _wifiEditing;
+        if (slot === -1) {
+            const freeSlot = slots.find(n => !n.ssid);
+            if (!freeSlot) { wifiMsg('All 5 network slots are in use.', true); return; }
+            slot = freeSlot.slot;
+        }
+        const hadPw = _wifiEditing !== -1 && slots[slot].pk;
+        if (pw && pw.length < 8 && auth !== 0) { wifiMsg('WPA passwords need at least 8 characters.', true); return; }
+        if (pw && auth === 0) auth = 3;                 // a password means it is not an open network
+        if (!pw && !hadPw && auth !== 0) {
+            if (!confirm(`No password entered. Save "${ssid}" as an open network (no password)?`)) return;
+            auth = 0;
+        }
+        const params = slot === 0 ? { w0: ssid, w2: auth } : { ['x' + slot + 's']: ssid, ['x' + slot + 'a']: auth };
+        if (pw) params[slot === 0 ? 'w1' : 'x' + slot + 'p'] = pw;
+        wifiRequest(params)
+        .then(() => { _wifiEditing = null; wifiRender(); wifiMsg(`Saved "${ssid}". Takes effect after a reboot.`); })
+        .catch(e => wifiMsg('Failed to save: ' + e.message, true));
+    }
+    function wifiForget(slot) {
+        const net = wifiSlots(_wifi)[slot];
+        if (!confirm(`Forget "${net.ssid}"?`)) return;
+        wifiRequest({ xc: slot })
+        .then(() => { _wifiEditing = null; wifiRender(); wifiMsg(`Removed "${net.ssid}". Takes effect after a reboot.`); })
+        .catch(e => wifiMsg('Failed to remove: ' + e.message, true));
+    }
+    function wifiSetEnabled(el) {
+        const on = el.checked;
+        if (!on && !confirm('Stop joining saved networks? After the next reboot the trickler opens its own setup hotspot instead, where you can turn this back on.')) {
+            el.checked = true; return;
+        }
+        wifiRequest({ w4: on ? 'true' : 'false' })
+        .then(() => wifiMsg(on ? 'Joining saved networks enabled. Takes effect after a reboot.' : 'Saved networks disabled: the setup hotspot opens after the next reboot.'))
+        .catch(e => { el.checked = !on; wifiMsg('Failed to save: ' + e.message, true); });
+    }
+    function wifiSaveTimeout() {
+        const sec = Math.round(Number(document.getElementById('wifiTimeoutInput').value));
+        if (!(sec >= 5 && sec <= 120)) { wifiMsg('Timeout must be between 5 and 120 s.', true); return; }
+        wifiRequest({ w3: sec * 1000 })
+        .then(() => { wifiRender(); wifiMsg(`Timeout set to ${sec} s.`); })
+        .catch(e => wifiMsg('Failed to save: ' + e.message, true));
     }
 
 
@@ -3757,7 +3865,7 @@ const ChargeModeState = Object.freeze({
             })
             .then(data => {
                 for (const key in data) {
-                    const element = targetForm.querySelector('[name="' + key + '"]');
+                    const element = formField(targetForm, key);
                     if (element) {
                         element.value = String(data[key]);
                     }
@@ -5206,6 +5314,8 @@ const ChargeModeState = Object.freeze({
             _loadThrowHistory();
             ctLoadHistory();
             ctPoll();
+            applyUiMode();
+            initAdvHints();
             _pollAcceptTolerance();
             renderThrowHistory();
             setInterval(_pollThrowHistory, 500);
