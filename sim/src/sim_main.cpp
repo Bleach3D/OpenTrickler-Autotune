@@ -23,6 +23,8 @@
 
 extern "C" {
 #include "scale.h"
+void sim_rt_start(void);
+void sim_rt_stop(void);
 }
 
 extern sim_plant_config_t g_plant_cfg;
@@ -226,6 +228,9 @@ int main(int argc, char **argv) {
     }
 
     sim_plant_reset(&g_plant_cfg, &g_plant_state, seed);
+    // Starts the plant ticker thread; without it the pan never fills and the
+    // first charge waits forever.
+    sim_rt_start();
 
     setup_profile();
     charge_mode_config_init();
@@ -302,5 +307,6 @@ int main(int argc, char **argv) {
     free(times);
     free(handoffs);
     free(fine_times);
+    sim_rt_stop();
     return 0;
 }

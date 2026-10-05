@@ -108,7 +108,9 @@ _Static_assert(sizeof(ai_tuning_history_t) <= FLASH_STORAGE_ML_HISTORY_SIZE,
                "AI tuning history no longer fits in reserved flash storage");
 
 static float ai_clampf(float value, float min_value, float max_value) {
-    if (value < min_value) {
+    // !(>=) also catches NaN, which would otherwise pass straight through
+    // both comparisons (e.g. a NaN config value read back from EEPROM).
+    if (!(value >= min_value)) {
         return min_value;
     }
     if (value > max_value) {
@@ -315,7 +317,7 @@ bool ai_tuning_start(profile_t* profile, float target_weight) {
         ai_tuning_init();
     }
 
-    if (profile == NULL || target_weight <= 0.0f) {
+    if (profile == NULL || !(target_weight > 0.0f) || !isfinite(target_weight)) {
         return false;
     }
 
@@ -346,7 +348,7 @@ bool ai_tuning_start_machine_calibration(profile_t* profile, float target_weight
         ai_tuning_init();
     }
 
-    if (profile == NULL || target_weight <= 0.0f) {
+    if (profile == NULL || !(target_weight > 0.0f) || !isfinite(target_weight)) {
         return false;
     }
 

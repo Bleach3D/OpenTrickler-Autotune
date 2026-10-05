@@ -64,6 +64,10 @@ typedef struct {
     uint32_t stable_accum_ms;
     uint32_t last_report_tick;
     uint64_t rng_state;
+    // Spin-down time constant, latched by sim_plant_step() when each motor's
+    // command drops to zero so the tail totals the configured tail mass.
+    double coarse_stop_tau_ms;
+    double fine_stop_tau_ms;
 } sim_plant_state_t;
 
 void sim_plant_defaults(sim_plant_config_t *cfg);

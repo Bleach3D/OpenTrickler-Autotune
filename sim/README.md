@@ -125,14 +125,33 @@ Until you do that: **relative** comparisons are trustworthy (does raising
 the bias slow it down? does the coarse handoff respect my setting?),
 **absolute** seconds and grains are not.
 
-## Known limitation: the AI path needs a model
+## AI characterization harness (`ottrickler_ai_char`)
 
-The firmware only uses the adaptive/AI controller when the selected profile
-has a **valid, enabled, characterized** AI model saved. The simulator starts
-with empty flash, so out of the box it exercises the classic PID fallback
-path instead — which is why `--coarse-auto` and the default currently
-produce identical numbers.
+The adaptive controller only runs from a characterized AI model, and the
+simulator starts with empty flash. `ottrickler_ai_char` closes that gap: it
+runs a full AI powder characterization through the real charge-mode state
+machine (the AI sample path in `charge_mode.cpp` plus `ai_tuning.c`), the
+same way the web GUI's "Start characterization" does, prints every recorded
+drop and the fitted model, then throws charges.
 
-To test the adaptive controller (the code path where the coarse-handoff and
-accuracy/speed-bias work lives), a characterized model has to be seeded into
-the simulated flash first. That is the next thing to build.
+```
+ottrickler_ai_char --target 43.5 --charges 5 --save-model model.bin
+ottrickler_ai_char --load-model model.bin --adaptive --charges 10
+```
+
+| Option | Meaning |
+|---|---|
+| `--target <gn>` | Characterization / charge target (default 43.5) |
+| `--charges <n>` | Charges to throw afterwards (default 5) |
+| `--adaptive` | Throw them with the adaptive controller (the AI model) instead of PID |
+| `--save-model <file>` / `--load-model <file>` | Keep a fitted model so charges can be re-run without the ~3 minute characterization |
+| `--no-tare` | No `force_zero` on the scale (like the generic scale driver) |
+| `--stall-s <s>` | Watchdog: fail if one charge-mode phase lasts longer than this (default 60) |
+| `--seed`, `--kernel`, `--coarse-tail`, `--fine-tail`, `--noise`, `--coarse-k`, `--fine-k` | Plant settings, as above |
+| `-q` / `-v` / `-vv` | Summary / per-drop and per-charge / full motor trace |
+
+Exit status is 0 when characterization completes and the model is saved, 2
+on a stall (for example charge mode dropping to its normal "Remove Cup" wait
+because a characterization drop was rejected), and 3 if AI tuning reports an
+error. Like the other targets it runs in real time, so a full
+characterization takes about 3½ minutes.

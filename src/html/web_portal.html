@@ -5190,7 +5190,11 @@ const ChargeModeState = Object.freeze({
         }
         fetch(`/rest/ai_tuning_config_set?${params.toString()}`)
         .then(r => r.json())
-        .then(() => {
+        .then(data => {
+            if (data && data.success === false) {
+                alert('AI settings not saved: ' + (data.error || 'unknown error'));
+                return;
+            }
             const d = document.getElementById('settingsAppliedSuccessDialog');
             if (d) d.showModal();
         })

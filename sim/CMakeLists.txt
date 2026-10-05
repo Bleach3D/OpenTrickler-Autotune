@@ -46,7 +46,18 @@ add_executable(ottrickler_batch
     src/sim_main.cpp
 )
 
-foreach(tgt ottrickler_sim ottrickler_batch)
+# AI characterization harness: runs a full characterization through charge
+# mode with a stall watchdog, then throws charges with the fitted model.
+add_executable(ottrickler_ai_char
+    ${FW_SOURCES}
+    src/sim_plant.c
+    src/sim_stubs.c
+    src/sim_rt.cpp
+    src/sim_http.cpp
+    src/sim_ai_char.cpp
+)
+
+foreach(tgt ottrickler_sim ottrickler_batch ottrickler_ai_char)
 target_include_directories(${tgt} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/shims
     ${FW_SRC}
@@ -57,7 +68,7 @@ endforeach()
 find_package(Threads REQUIRED)
 
 # profile.c uses assert() without including <assert.h>.
-foreach(tgt ottrickler_sim ottrickler_batch)
+foreach(tgt ottrickler_sim ottrickler_batch ottrickler_ai_char)
   if(MSVC)
     # msvc_compat.h neutralises the GCC extensions the firmware headers use.
     # It must be parsed before any firmware header.
@@ -75,10 +86,13 @@ endforeach()
 
 target_link_libraries(ottrickler_sim PRIVATE Threads::Threads)
 target_link_libraries(ottrickler_batch PRIVATE Threads::Threads)
+target_link_libraries(ottrickler_ai_char PRIVATE Threads::Threads)
 if(NOT MSVC)
     target_link_libraries(ottrickler_sim PRIVATE m)
     target_link_libraries(ottrickler_batch PRIVATE m)
+    target_link_libraries(ottrickler_ai_char PRIVATE m)
 else()
     target_link_libraries(ottrickler_sim PRIVATE ws2_32)
     target_link_libraries(ottrickler_batch PRIVATE ws2_32)
+    target_link_libraries(ottrickler_ai_char PRIVATE ws2_32)
 endif()

@@ -154,18 +154,35 @@ void sim_plant_step(const sim_plant_config_t *cfg, sim_plant_state_t *st, uint32
     // rate the motor was running at when it was told to stop. That matches
     // the physical picture: the tail is powder already in flight and on the
     // tube lip, i.e. roughly a fixed mass, not a fixed time.
-    double coarse_tau = cfg->coarse_spindown_ms;
-    if (coarse_target <= 0.0 && st->coarse_flow_gps > 0.001) {
-        coarse_tau = (cfg->coarse_tail_gn / st->coarse_flow_gps) * 1000.0;
-        if (coarse_tau < 10.0) coarse_tau = 10.0;
-        if (coarse_tau > 3000.0) coarse_tau = 3000.0;
+    //
+    // tau has to be latched once, from the flow at the moment of the stop.
+    // Recomputing it every step from the decaying flow makes tau grow as the
+    // flow falls, which drags the tail out over many seconds and roughly
+    // triples its mass.
+    if (coarse_target > 0.0) {
+        st->coarse_stop_tau_ms = 0.0;
+    } else if (st->coarse_stop_tau_ms <= 0.0) {
+        double tau = cfg->coarse_spindown_ms;
+        if (st->coarse_flow_gps > 0.001) {
+            tau = (cfg->coarse_tail_gn / st->coarse_flow_gps) * 1000.0;
+            if (tau < 10.0) tau = 10.0;
+            if (tau > 3000.0) tau = 3000.0;
+        }
+        st->coarse_stop_tau_ms = tau;
     }
-    double fine_tau = cfg->fine_spindown_ms;
-    if (fine_target <= 0.0 && st->fine_flow_gps > 0.0001) {
-        fine_tau = (cfg->fine_tail_gn / st->fine_flow_gps) * 1000.0;
-        if (fine_tau < 5.0) fine_tau = 5.0;
-        if (fine_tau > 3000.0) fine_tau = 3000.0;
+    if (fine_target > 0.0) {
+        st->fine_stop_tau_ms = 0.0;
+    } else if (st->fine_stop_tau_ms <= 0.0) {
+        double tau = cfg->fine_spindown_ms;
+        if (st->fine_flow_gps > 0.0001) {
+            tau = (cfg->fine_tail_gn / st->fine_flow_gps) * 1000.0;
+            if (tau < 5.0) tau = 5.0;
+            if (tau > 3000.0) tau = 3000.0;
+        }
+        st->fine_stop_tau_ms = tau;
     }
+    double coarse_tau = (coarse_target > 0.0) ? cfg->coarse_spindown_ms : st->coarse_stop_tau_ms;
+    double fine_tau = (fine_target > 0.0) ? cfg->fine_spindown_ms : st->fine_stop_tau_ms;
 
     st->coarse_flow_gps = sim_approach(st->coarse_flow_gps, coarse_target, dt,
                                        coarse_target > st->coarse_flow_gps ? cfg->coarse_spinup_ms
