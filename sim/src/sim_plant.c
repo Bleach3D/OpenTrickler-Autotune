@@ -133,6 +133,8 @@ static double sim_approach(double current, double target, double dt_ms, double t
     return current + (target - current) * alpha;
 }
 
+#define SIM_MAX_STOP_TAU_MS 1000.0
+
 void sim_plant_step(const sim_plant_config_t *cfg, sim_plant_state_t *st, uint32_t dt_ms) {
     if (cfg == NULL || st == NULL || dt_ms == 0) {
         return;
@@ -155,6 +157,13 @@ void sim_plant_step(const sim_plant_config_t *cfg, sim_plant_state_t *st, uint32
     // the physical picture: the tail is powder already in flight and on the
     // tube lip, i.e. roughly a fixed mass, not a fixed time.
     //
+    // tau is capped: powder already in flight lands within about a second of
+    // the stop. Without the cap, a tube stopped while crawling (as the PID
+    // fine phase ends) would keep dribbling the full tail mass for many
+    // seconds, landing powder long after the charge has been judged settled.
+    // So a slow tube has a proportionally smaller tail, a fast one the full
+    // configured mass.
+    //
     // tau has to be latched once, from the flow at the moment of the stop.
     // Recomputing it every step from the decaying flow makes tau grow as the
     // flow falls, which drags the tail out over many seconds and roughly
@@ -166,7 +175,7 @@ void sim_plant_step(const sim_plant_config_t *cfg, sim_plant_state_t *st, uint32
         if (st->coarse_flow_gps > 0.001) {
             tau = (cfg->coarse_tail_gn / st->coarse_flow_gps) * 1000.0;
             if (tau < 10.0) tau = 10.0;
-            if (tau > 3000.0) tau = 3000.0;
+            if (tau > SIM_MAX_STOP_TAU_MS) tau = SIM_MAX_STOP_TAU_MS;
         }
         st->coarse_stop_tau_ms = tau;
     }
@@ -177,7 +186,7 @@ void sim_plant_step(const sim_plant_config_t *cfg, sim_plant_state_t *st, uint32
         if (st->fine_flow_gps > 0.0001) {
             tau = (cfg->fine_tail_gn / st->fine_flow_gps) * 1000.0;
             if (tau < 5.0) tau = 5.0;
-            if (tau > 3000.0) tau = 3000.0;
+            if (tau > SIM_MAX_STOP_TAU_MS) tau = SIM_MAX_STOP_TAU_MS;
         }
         st->fine_stop_tau_ms = tau;
     }
