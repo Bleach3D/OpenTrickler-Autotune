@@ -24,6 +24,8 @@ set(FW_SOURCES
     ${FW_SRC}/profile.c
     ${FW_SRC}/common.c
     ${FW_SRC}/FloatRingBuffer.cpp
+    ${FW_SRC}/throw_learner.c
+    ${FW_SRC}/learn_from_throws.c
 )
 
 # Real-time build with the web GUI - this is the main one.
@@ -57,15 +59,14 @@ add_executable(ottrickler_ai_char
     src/sim_ai_char.cpp
 )
 
-# Learn-from-every-throw prototype: PID charges whose stop thresholds are
-# adjusted after each charge by src/throw_learner.c.
+# Learn From Throws: PID charges with the firmware's per-profile threshold
+# learning switched on (src/learn_from_throws.c, src/throw_learner.c).
 add_executable(ottrickler_learn
     ${FW_SOURCES}
     src/sim_plant.c
     src/sim_stubs.c
     src/sim_rt.cpp
     src/sim_http.cpp
-    src/throw_learner.c
     src/sim_learn.cpp
 )
 

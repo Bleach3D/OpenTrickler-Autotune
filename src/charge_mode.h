@@ -176,6 +176,10 @@ bool charge_mode_is_menu_active(void);
 // copy (charge_mode_config.eeprom_charge_mode_data). Call this any time the
 // selected profile changes so the correct charge mode settings are used.
 bool charge_mode_data_load_for_profile(uint8_t profile_idx);
+// A profile's stored coarse/fine stop thresholds and accepted tolerance
+// (the active working copy if it is the loaded profile).
+bool charge_mode_get_profile_thresholds(uint8_t profile_idx, float *coarse_stop_gn,
+                                        float *fine_stop_gn, float *accept_tolerance_gn);
 uint8_t charge_mode_data_get_loaded_profile_idx(void);
 
 // Live manual-finish status, for the on-device render task and REST state

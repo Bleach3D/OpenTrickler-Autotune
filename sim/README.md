@@ -156,29 +156,26 @@ because a characterization drop was rejected), and 3 if AI tuning reports an
 error. Like the other targets it runs in real time, so a full
 characterization takes about 3½ minutes.
 
-## Learn-from-every-throw prototype (`ottrickler_learn`)
+## Learn From Throws (`ottrickler_learn`)
 
-A candidate replacement for AI tuning, prototyped here before any firmware
-change. Charges run on the normal PID loop, untouched. After each one,
-`src/throw_learner.c` looks at what the charge loop saw from the scale and
-adjusts the two PID stop thresholds for the next charge:
+Runs PID charges with the firmware's Learn From Throws switched on for the
+profile, the same way the Profile page switch does. Everything that learns is
+firmware code: the observation capture in `charge_mode.cpp`, the update in
+`charge_mode_stabilize()` (before any top-up), `src/learn_from_throws.c` and
+`src/throw_learner.c`. After each charge:
 
-- **Fine stop** follows the observed fine tail (final weight minus the
-  reading at the final stop), aiming to cover nearly every tail: the running
-  mean plus two typical deviations, a quarter of the tolerance short of
-  target.
-- **Coarse stop** keeps what is left for the fine tube about 1.5 s after the
-  coarse stop at the reserve (`--reserve`, default 0.6 gn) plus two typical
+- **Fine stop** follows the observed fine tail (settled weight minus the
+  reading at the final stop), covering nearly every tail: the running mean
+  plus two typical deviations, a quarter of the tolerance short of target.
+- **Coarse stop** keeps what is left for the fine tube 1.5 s after the coarse
+  stop at the reserve (`--reserve`, default 0.6 gn) plus two typical
   deviations of how much coarse leaves.
 - An overthrow, or coarse leaving less than half the reserve, raises the
   threshold at once. Anything else moves it gradually.
 
-`throw_learner.c` is plain C with no simulator dependencies, so it can move
-into the firmware unchanged.
-
 ```
 ottrickler_learn                                   # learn from the firmware defaults
-ottrickler_learn --fixed                           # same, thresholds held fixed
+ottrickler_learn --fixed                           # learning off, thresholds held
 ottrickler_learn --coarse-kp 16 --fine-kp 20 --fine-max 6 --coarse-stop 1.0
                                                    # fast profile that overthrows when fixed
 ottrickler_learn --change-at 12                    # coarse flow x1.3, tails x1.5 from charge 12

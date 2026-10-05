@@ -521,6 +521,33 @@
                                 <span class="label-text-alt opacity-70 ot-help">How close to target counts as done for the fine tube &mdash; it stops once the remaining weight is under this. <b>Typical 0.02&ndash;0.05&nbsp;gn.</b> <b>Lower</b> = tighter charges but more time creeping, and more chance of tipping into an overcharge. <b>Higher</b> = quicker, consistently a touch light. <b>Do not set below your powder kernel weight</b> &mdash; asking for 0.01&nbsp;gn from a 0.04&nbsp;gn granule is asking for something the hardware cannot deliver.</span>
                             </div>
 
+                            <div id="ltlSection" class="grid grid-cols-1 gap-2 rounded-box border border-base-300 p-3">
+                                <div class="flex items-center justify-between gap-2 flex-wrap">
+                                    <span class="label-text font-semibold">Learn From Throws</span>
+                                    <label class="label cursor-pointer gap-2 p-0">
+                                        <span class="label-text text-sm" id="ltlEnabledLabel">Off</span>
+                                        <input type="checkbox" class="toggle toggle-primary" id="ltlEnabled" onchange="onLtlEnabledChanged(this)">
+                                    </label>
+                                </div>
+                                <span class="label-text-alt opacity-70 ot-help">PID controller only. While on, this profile's coarse and fine stop thresholds are learned from your own charges instead of being fixed: after every charge it measures how much landed after each stop and adjusts them. An overthrow moves the stop earlier straight away; a charge that lands short only nudges it later, so it settles just on the safe side. It starts from the two thresholds set here and needs roughly 5&ndash;10 charges to settle. Separate from AI Tuning: no characterization run, and it does not use or change the AI model.</span>
+                                <div id="ltlAdaptiveNote" class="alert alert-warning py-2 text-sm" style="display:none;">
+                                    <span>The Controller above is set to Adaptive, so Learn From Throws is not used until it is set back to PID.</span>
+                                </div>
+                                <div id="ltlDetails" class="text-sm grid grid-cols-2 gap-x-4 gap-y-1" style="display:none;">
+                                    <span class="opacity-70">Learned coarse stop</span><span id="ltlCoarseStop">-</span>
+                                    <span class="opacity-70">Learned fine stop</span><span id="ltlFineStop">-</span>
+                                    <span class="opacity-70">Charges learned from</span><span id="ltlCharges">-</span>
+                                    <span class="opacity-70">Last charge</span><span id="ltlLast">-</span>
+                                </div>
+                                <div class="flex gap-2 items-center flex-wrap">
+                                    <span class="label-text text-sm">Fine reserve <span class="ot-unit">grains</span></span>
+                                    <input id="ltlReserve" type="number" step="0.05" min="0.2" max="3" class="input input-bordered input-sm w-24">
+                                    <button type="button" class="btn btn-neutral btn-sm" onclick="onLtlReserveSave()">Save</button>
+                                    <button type="button" class="btn btn-ghost btn-sm" onclick="onLtlReset()">Reset learning</button>
+                                </div>
+                                <span class="label-text-alt opacity-70 ot-help">Fine reserve: how much the coarse tube should leave for the fine tube once its own tail has landed. <b>Higher</b> = safer against coarse overshoot, slower. <b>Lower</b> = faster. 0.6&nbsp;gn suits most setups. Reset forgets what was learned and starts again from the two thresholds on this page.</span>
+                            </div>
+
                                 <div class="legacy-adaptive-only" style="display:none;">
                             <div class="grid grid-cols-1 gap-1">
                                 <span class="label-text">Coarse Stop Authority</span>
@@ -2795,6 +2822,7 @@ const ChargeModeState = Object.freeze({
                 .catch(e => console.error('Failed to load charge mode settings:', e));
             }
             refreshProfileKernelWeightWidget(idx);
+            refreshLearnFromThrows(idx);
         }
         else {
             _stopAiHistoryPoll();
@@ -2863,6 +2891,7 @@ const ChargeModeState = Object.freeze({
                 populateChargeModeProfileSelection(chargeModeSel);
             }
             refreshProfileKernelWeightWidget(profileIdx);
+            refreshLearnFromThrows(profileIdx);
         })
     }
 
@@ -2941,6 +2970,8 @@ const ChargeModeState = Object.freeze({
     function _showLegacyAdaptiveOptions(isAdaptive) {
         document.querySelectorAll('.legacy-adaptive-only')
             .forEach(b => { b.style.display = isAdaptive ? 'block' : 'none'; });
+        const ltlNote = document.getElementById('ltlAdaptiveNote');
+        if (ltlNote) ltlNote.style.display = isAdaptive ? '' : 'none';
     }
 
     function onControllerChanged(el) {
@@ -4642,6 +4673,72 @@ const ChargeModeState = Object.freeze({
             }
         })
         .catch(() => { if (status) status.innerText = '-'; });
+    }
+
+    // ---- Learn From Throws (Profile page) ----
+    function _ltlRender(data) {
+        const toggle = document.getElementById('ltlEnabled');
+        if (!toggle || !data) return;
+        toggle.checked = !!data.enabled;
+        const label = document.getElementById('ltlEnabledLabel');
+        if (label) label.innerText = data.enabled ? 'On' : 'Off';
+        const reserve = document.getElementById('ltlReserve');
+        if (reserve && document.activeElement !== reserve) reserve.value = Number(data.reserve).toFixed(2);
+        const details = document.getElementById('ltlDetails');
+        if (details) details.style.display = (data.enabled || data.charges > 0) ? '' : 'none';
+        const set = (id, text) => { const el = document.getElementById(id); if (el) el.innerText = text; };
+        set('ltlCoarseStop', `${Number(data.coarse_stop).toFixed(3)} gn (yours: ${Number(data.profile_coarse_stop).toFixed(3)})`);
+        set('ltlFineStop', `${Number(data.fine_stop).toFixed(3)} gn (yours: ${Number(data.profile_fine_stop).toFixed(3)})`);
+        set('ltlCharges', String(data.charges));
+        const last = data.last;
+        if (last) {
+            const err = (last.error === null) ? '-' : `${last.error >= 0 ? '+' : ''}${Number(last.error).toFixed(3)} gn`;
+            const notes = [];
+            if (last.overthrow) notes.push('overthrow');
+            if (last.coarse_backoff) notes.push('coarse stop raised');
+            if (last.fine_backoff) notes.push('fine stop raised');
+            set('ltlLast', notes.length ? `${err} (${notes.join(', ')})` : err);
+        } else {
+            set('ltlLast', '-');
+        }
+        const note = document.getElementById('ltlAdaptiveNote');
+        const controller = document.querySelector('#chargeModeConfigForm [name="c27"]');
+        if (note) note.style.display = (controller && controller.value === 'true') ? '' : 'none';
+    }
+
+    function refreshLearnFromThrows(profileIdx) {
+        if (!document.getElementById('ltlSection')) return;
+        const idx = (profileIdx === undefined || profileIdx === null) ? _profileCurrentIdx : profileIdx;
+        fetch(`/rest/learn_from_throws?pf=${encodeURIComponent(idx)}`)
+        .then(r => r.json())
+        .then(_ltlRender)
+        .catch(e => console.error('Failed to load Learn From Throws:', e));
+    }
+
+    function _ltlSend(query) {
+        return fetch(`/rest/learn_from_throws?pf=${encodeURIComponent(_profileCurrentIdx)}&${query}`)
+        .then(r => r.json())
+        .then(_ltlRender)
+        .catch(e => alert('Learn From Throws: ' + e.message));
+    }
+
+    function onLtlEnabledChanged(el) {
+        _ltlSend(`enabled=${el.checked ? 'true' : 'false'}`);
+    }
+
+    function onLtlReserveSave() {
+        const el = document.getElementById('ltlReserve');
+        const v = parseFloat(el ? el.value : '');
+        if (Number.isNaN(v) || v <= 0) {
+            alert('Enter a fine reserve greater than 0 (grains).');
+            return;
+        }
+        _ltlSend(`reserve=${encodeURIComponent(v)}`);
+    }
+
+    function onLtlReset() {
+        if (!confirm('Forget what this profile has learned and start again from its own coarse/fine stop thresholds?')) return;
+        _ltlSend('reset=1');
     }
 
     function onSaveKernelWeightClickedProfile() {

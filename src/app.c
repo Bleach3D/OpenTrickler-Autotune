@@ -20,6 +20,7 @@
 #include "scale.h"
 #include "display.h"
 #include "charge_mode.h"
+#include "learn_from_throws.h"
 #include "rest_endpoints.h"
 #include "wireless.h"
 #include "neopixel_led.h"
@@ -63,6 +64,10 @@ int main()
 
     // Charge timeline recorder (web UI "Charge Timeline" card)
     charge_timeline_init();
+
+    // Learn From Throws state (per profile; seeds from the charge mode
+    // thresholds above, so it has to come after them)
+    learn_from_throws_init();
 
     // Initialize the servo
     servo_gate_init();

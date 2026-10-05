@@ -20,6 +20,7 @@
 #include "ai_tuning.h"
 #include "rest_pid_autotune.h"
 #include "pid_autotune.h"
+#include "learn_from_throws.h"
 #include "flash_storage.h"
 #include "display_config.h"
 #include "ota_update.h"
@@ -238,6 +239,9 @@ bool rest_endpoints_init(bool default_wizard) {
     // Initialize PID autotune ("Learn Powder"-style characterisation) and REST endpoints
     pid_autotune_init();
     rest_pid_autotune_init();
+
+    // Learn From Throws (initialised in app.c; this is just its endpoint)
+    rest_register_handler("/rest/learn_from_throws", http_rest_learn_from_throws);
 
     return true;
 }

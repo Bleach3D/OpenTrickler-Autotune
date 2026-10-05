@@ -19,6 +19,7 @@
 #define EEPROM_AI_TUNING_CONFIG_BASE_ADDR      14 * 1024       // 14k
 #define EEPROM_UPDATE_CONFIG_BASE_ADDR         15 * 1024       // 15k
 #define EEPROM_PID_AUTOTUNE_CONFIG_BASE_ADDR   17 * 1024       // 17k
+#define EEPROM_LEARN_FROM_THROWS_BASE_ADDR     18 * 1024       // 18k
 // Temporary crash-diagnosis marker for the OTA update-check TLS client (see
 // src/ota_debug.h) -- one raw byte, deliberately outside the CRC32
 // load_config()/save_config() framework so it can be written immediately at

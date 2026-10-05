@@ -1,4 +1,4 @@
-// Learn-from-every-throw threshold tuning for the PID controller (prototype).
+// Learn-from-every-throw threshold tuning for the PID controller.
 //
 // The PID charge loop stops the coarse tube when the remaining weight drops
 // below coarse_stop_threshold, and stops everything when it drops below
@@ -17,8 +17,9 @@
 //                overthrow risk and is corrected at once; too much just
 //                wastes time and is trimmed gradually.
 //
-// Written in plain C with no simulator dependencies so it can move into the
-// firmware unchanged if it proves itself.
+// Pure algorithm: no hardware, RTOS or storage dependencies, so the
+// simulator (sim/, ottrickler_learn) runs exactly this code. Per-profile
+// storage, the charge-mode hooks and REST live in learn_from_throws.c.
 #ifndef THROW_LEARNER_H_
 #define THROW_LEARNER_H_
 
