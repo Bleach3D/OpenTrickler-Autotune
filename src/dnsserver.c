@@ -151,9 +151,11 @@ static void dns_server_process(void *arg, struct udp_pcb *upcb, struct pbuf *p, 
     const uint8_t *question_ptr_start = dns_msg + sizeof(dns_header_t);
     const uint8_t *question_ptr_end = dns_msg + msg_len;
     const uint8_t *question_ptr = question_ptr_start;
+    bool qname_terminated = false;
     while(question_ptr < question_ptr_end) {
         if (*question_ptr == 0) {
             question_ptr++;
+            qname_terminated = true;
             break;
         } else {
             if (question_ptr > question_ptr_start) {
@@ -176,7 +178,15 @@ static void dns_server_process(void *arg, struct udp_pcb *upcb, struct pbuf *p, 
         goto ignore_request;
     }
 
-    // Skip QNAME and QTYPE
+    // The name and its QTYPE/QCLASS must lie inside the received message;
+    // otherwise the reply would echo uninitialised stack bytes from dns_msg
+    // past the end of what was actually received.
+    if (!qname_terminated || question_ptr + 4 > question_ptr_end) {
+        DEBUG_printf("Invalid question\n");
+        goto ignore_request;
+    }
+
+    // Skip QTYPE and QCLASS
     question_ptr += 4;
 
     // Generate answer

@@ -39,7 +39,9 @@ bool access_point_mode_start() {
     // Start the dhcp server
     dhcp_server_init(&dhcp_server, &gw, &mask);
 
-    // Start the dns server
+    // Start the dns server. Uses the file-scope dns_server: the server keeps
+    // a pointer to it as its UDP callback argument, and access_point_mode_stop()
+    // deinits that same instance.
     dns_server_init(&dns_server, &gw);
 
     sprintf(first_line_buffer, ">%s", host_name);
