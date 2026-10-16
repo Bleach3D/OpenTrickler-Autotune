@@ -762,6 +762,8 @@ void handle_motor_init_error(motor_init_err_t err) {
         // Draw error message
         u8g2_SetFont(display_handler, u8g2_font_profont11_tf);
         u8g2_DrawStr(display_handler, 5, 25, error_string);
+        u8g2_DrawStr(display_handler, 5, 40, "Check motor power");
+        u8g2_DrawStr(display_handler, 5, 52, "Wi-Fi/web still on");
 
         // Draw error message
         u8g2_SendBuffer(display_handler);

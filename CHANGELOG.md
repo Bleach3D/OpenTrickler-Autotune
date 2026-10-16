@@ -366,6 +366,13 @@ Base: `Opentrickler_ML` `2026.07.12-beta.14`.
 
 ### Fixed
 
+- **No setup hotspot when the motor drivers don't answer.** A motor
+  driver init error (e.g. no motor supply connected yet, or a wiring fault)
+  was handled before the scheduler started, in a loop that never returns, so
+  Wi-Fi never started and a new build could not be configured at all. The
+  error screen now runs as its own task: the hotspot and web portal come up
+  as normal, and only the menu (and so charging) stays off until the drivers
+  respond.
 - **AI characterization stalled on "Remove Cup" after the first coarse
   sample.** The coarse stop weight was read with a helper that only accepts
   weights above 3% of the charge target, which characterization pulses are

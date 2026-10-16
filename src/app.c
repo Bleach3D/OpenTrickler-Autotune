@@ -31,6 +31,11 @@
 #include "servo_gate.h"
 
 
+static void motor_init_error_task(void *p) {
+    handle_motor_init_error((motor_init_err_t)(uintptr_t)p);   // never returns
+}
+
+
 int main()
 {
     // stdio_init_all();
@@ -46,11 +51,13 @@ int main()
     // Initialize wireless settings
     wireless_init();
 
-    // Load config for motors
+    // Load config for motors. A failure is reported from a task once the
+    // scheduler is running (see below), not here: handle_motor_init_error()
+    // never returns, and calling it before vTaskStartScheduler() meant the
+    // Wi-Fi task created above never ran -- so a new build whose stepper
+    // drivers did not answer (no motor supply, wiring) also never brought up
+    // the setup hotspot or web portal needed to configure it.
     motor_init_err_t motor_init_err = motors_init();
-    if (motor_init_err != MOTOR_INIT_OK) {
-        handle_motor_init_error(motor_init_err);
-    }
 
     // Initialize UART
     scale_init();
@@ -72,8 +79,16 @@ int main()
     // Initialize the servo
     servo_gate_init();
 
-    // Start menu task
-    xTaskCreate(menu_task, "Menu Task", 1024, NULL, 6, NULL);
+    if (motor_init_err == MOTOR_INIT_OK) {
+        // Start menu task
+        xTaskCreate(menu_task, "Menu Task", 1024, NULL, 6, NULL);
+    }
+    else {
+        // No menu (nothing that drives the motors runs); Wi-Fi and the web
+        // portal still start so the machine can be configured and checked.
+        xTaskCreate(motor_init_error_task, "Motor Error Task", 512,
+                    (void *)(uintptr_t)motor_init_err, 6, NULL);
+    }
 
     // Start RTOS
     vTaskStartScheduler();
