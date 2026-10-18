@@ -11,6 +11,8 @@ compares the version strings literally.
 
 ## [Unreleased]
 
+## [v1.3.0] — 2026-10-18
+
 Taken over from
 [thomaspember1990/OpenTrickler-Firmware](https://github.com/thomaspember1990/OpenTrickler-Firmware)
 (commits up to `9288faa`).
