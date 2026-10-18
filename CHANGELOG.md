@@ -11,6 +11,17 @@ compares the version strings literally.
 
 ## [Unreleased]
 
+## [v1.2.1] — 2026-10-18
+
+### Fixed
+
+- **Rotary encoder occasionally ignored a detent.** The quadrature state
+  machine tested the wrong line in one state, so contact bounce there counted
+  in the wrong direction and the step was lost (and could shift following
+  steps). Replaced with a table-driven decoder that reads both lines and
+  decides only at the detent position, resetting the count each time.
+  Encoder event queue enlarged from 5 to 16 entries.
+
 ## [v1.2.0] — 2026-10-05
 
 ### Added

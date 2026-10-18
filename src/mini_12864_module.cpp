@@ -65,89 +65,58 @@ extern const size_t muif_cnt;
 
 
 void _isr_on_encoder_update(uint gpio, uint32_t event){
-    static uint8_t state = 2;
+    // Table-driven quadrature decoder. Index is (prev_ab << 2) | curr_ab with
+    // ab = (EN1 << 1) | EN2. Forward sequence is 00 -> 10 -> 11 -> 01 -> 00;
+    // invalid (double-step) transitions count as 0.
+    static const int8_t transition_table[16] = {
+         0, -1, +1,  0,
+        +1,  0,  0, -1,
+        -1,  0,  0, +1,
+         0, +1, -1,  0,
+    };
+    static const uint8_t detent_ab = 0b11;  // Rest position, both lines pulled high
+    static uint8_t prev_ab = detent_ab;
     static int8_t count = 0;
 
-    bool en1 = gpio_get(BUTTON0_ENCODER_PIN1);
-    bool en2 = gpio_get(BUTTON0_ENCODER_PIN2);
-
-    switch (state) {
-        case 0: {
-            if (en1) {
-                count += 1;
-                state = 1;
-            }
-            else if (en2) {
-                count -= 1;
-                state = 3;
-            }
-            break;
-        }
-        case 1: {
-            if (!en1) {
-                count -= 1;
-                state = 0;
-            }
-            else if (en2) {
-                count += 1;
-                state = 2;
-            }
-            break;
-        }
-        case 2: {
-            if (!en1) {
-                count += 1;
-                state = 3;
-            }
-            else if (!en2) {
-                count -= 1;
-                state = 1;
-            }
-            break;
-        }
-        case 3: {
-            if (!en1) {
-                count += 1;
-                state = 0;
-            }
-            else if (en2) {
-                count -= 1;
-                state = 2;
-            }
-            break;
-        }
-        default:
-            break;
+    uint8_t curr_ab = (gpio_get(BUTTON0_ENCODER_PIN1) << 1) | gpio_get(BUTTON0_ENCODER_PIN2);
+    if (curr_ab == prev_ab) {
+        return;  // Bounce or duplicate edge, nothing moved
     }
+
+    count += transition_table[(prev_ab << 2) | curr_ab];
+    prev_ab = curr_ab;
+
+    // Only decide at the detent so a missed or bounced intermediate step
+    // can't drop the tick or leak into the next one.
+    if (curr_ab != detent_ab) {
+        return;
+    }
+
+    bool forward;
+    if (count >= 2) {
+        forward = true;
+    }
+    else if (count <= -2) {
+        forward = false;
+    }
+    else {
+        count = 0;
+        return;
+    }
+    count = 0;
 
     ButtonEncoderEvent_t button_encoder_event;
-    if (count >= 4) {
-        count = 0;
-
-        if (mini_12864_module_config.inverted_encoder_direction) {
-            button_encoder_event = BUTTON_ENCODER_ROTATE_CCW;
-        }
-        else {
-            button_encoder_event = BUTTON_ENCODER_ROTATE_CW;
-        }
-        
-        if (encoder_event_queue) {
-            xQueueSendFromISR(encoder_event_queue, &button_encoder_event, NULL);
-        }
+    if (forward != mini_12864_module_config.inverted_encoder_direction) {
+        button_encoder_event = BUTTON_ENCODER_ROTATE_CW;
     }
-    else if (count <= -4) {
-        count = 0;
+    else {
+        button_encoder_event = BUTTON_ENCODER_ROTATE_CCW;
+    }
 
-        if (mini_12864_module_config.inverted_encoder_direction) {
-            button_encoder_event = BUTTON_ENCODER_ROTATE_CW;
-        }
-        else {
-            button_encoder_event = BUTTON_ENCODER_ROTATE_CCW;
-        }
-
-        if (encoder_event_queue) {
-            xQueueSendFromISR(encoder_event_queue, &button_encoder_event, NULL);
-        }
+    if (encoder_event_queue) {
+        BaseType_t higher_priority_task_woken = pdFALSE;
+        xQueueSendFromISR(encoder_event_queue, &button_encoder_event, &higher_priority_task_woken);
+        portYIELD_FROM_ISR(higher_priority_task_woken);
     }
 }
 
@@ -233,7 +202,7 @@ void button_init() {
     irq_handler.register_interrupt(BUTTON0_ENC_PIN, gpio_irq_handler::irq_event::fall, _isr_on_button_enc_update);
     irq_handler.register_interrupt(BUTTON0_RST_PIN, gpio_irq_handler::irq_event::fall, _isr_on_button_rst_update);
 
-    encoder_event_queue = xQueueCreate(5, sizeof(ButtonEncoderEvent_t));
+    encoder_event_queue = xQueueCreate(16, sizeof(ButtonEncoderEvent_t));
     if (encoder_event_queue == 0) {
         assert(false);
     }
