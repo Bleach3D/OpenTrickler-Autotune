@@ -2786,6 +2786,7 @@ const ChargeModeState = Object.freeze({
                         const el = formField(chargeForm, key);
                         if (el) el.value = String(data[key]);
                     }
+                    if ('c27' in data) _setTuningNavButton(String(data.c27) === 'true');
                     refreshAccuracySpeedLabel();
                     refreshLegacyAdaptiveVisibility();
                     refreshManualFinishVisibility();
@@ -2894,6 +2895,7 @@ const ChargeModeState = Object.freeze({
                     element.value = String(data[key]);
                 }
             }
+            if ('c27' in data) _setTuningNavButton(String(data.c27) === 'true');
             refreshAccuracySpeedLabel();
             refreshLegacyAdaptiveVisibility();
             refreshManualFinishVisibility();
@@ -2936,19 +2938,26 @@ const ChargeModeState = Object.freeze({
             });
     }
 
-    function onControllerChanged(el) {
-        const isAdaptive = String(el.value) === 'true';
+    function _showLegacyAdaptiveOptions(isAdaptive) {
         document.querySelectorAll('.legacy-adaptive-only')
             .forEach(b => { b.style.display = isAdaptive ? 'block' : 'none'; });
+    }
+
+    function onControllerChanged(el) {
+        const isAdaptive = String(el.value) === 'true';
+        _showLegacyAdaptiveOptions(isAdaptive);
         // Live feedback on the bottom-nav shortcut while editing -- this
         // select always reflects the active profile, so it's safe to
         // reflect immediately rather than waiting for Apply/Save.
         _setTuningNavButton(isAdaptive);
     }
 
+    // Visibility only. The bottom-nav button is not touched here: this also
+    // runs after loading other settings pages, when the Controller select may
+    // not hold the profile's value yet (it would then read as PID).
     function refreshLegacyAdaptiveVisibility() {
         const sel = document.querySelector('[name="c27"]');
-        if (sel) onControllerChanged(sel);
+        if (sel) _showLegacyAdaptiveOptions(String(sel.value) === 'true');
     }
 
     function onManualFinishChanged(el) {

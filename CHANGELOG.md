@@ -11,6 +11,15 @@ compares the version strings literally.
 
 ## [Unreleased]
 
+## [v1.2.4] — 2026-10-18
+
+### Fixed
+
+- **Bottom-nav "AI Tuning" turned into "PID Tuning" when opening Settings.**
+  Loading any settings page re-read the Controller field of the Profile page,
+  which had not been loaded yet and therefore read as PID. The button now
+  only follows the profile's saved controller, or a change you make to it.
+
 ## [v1.2.3] — 2026-10-18
 
 ### Removed
