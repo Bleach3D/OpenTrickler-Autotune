@@ -3155,6 +3155,7 @@ const ChargeModeState = Object.freeze({
     let _throwHistory = [];
     let _lastChargeState = null;
     let _chargeStartedAt = null;
+    let _pendingThrow = null;          // finished throw waiting for the settled weight
     let _acceptToleranceGn = 0.0205;   // refreshed from the active profile below
     let _includeRejects = false;       // default: only count throws you would actually load
 
@@ -3345,16 +3346,30 @@ const ChargeModeState = Object.freeze({
         .then(d => {
             const state = Number(d.s2);
             const target = Number(d.s0);
-            const weight = Number(d.s1);
-            if (_lastChargeState !== null && state !== _lastChargeState) {
-                // 2 = charging; 3 = waiting for cup removal, i.e. just finished.
-                if (state === 2) {
-                    _chargeStartedAt = Date.now();
-                } else if (state === 3 && target > 0) {
-                    const secs = _chargeStartedAt ? (Date.now() - _chargeStartedAt) / 1000 : null;
-                    recordThrow(target, weight, secs);
+            const settled = Number(d.s6);
+            // 2 = charging; 3 = waiting for cup removal, i.e. just finished.
+            // The scale keeps settling (and late powder keeps landing) while
+            // the cup is still on it, so the throw is only logged once that
+            // step is left, using the firmware's last settled weight (s6)
+            // rather than the live reading at the moment charging stopped.
+            if (state === 3) {
+                if (_lastChargeState !== null && _lastChargeState !== 3) {
+                    _pendingThrow = {
+                        target,
+                        secs: _chargeStartedAt ? (Date.now() - _chargeStartedAt) / 1000 : null,
+                        weight: NaN
+                    };
                     _chargeStartedAt = null;
                 }
+                if (_pendingThrow && isFinite(settled)) _pendingThrow.weight = settled;
+            } else if (_pendingThrow) {
+                if (_pendingThrow.target > 0 && isFinite(_pendingThrow.weight)) {
+                    recordThrow(_pendingThrow.target, _pendingThrow.weight, _pendingThrow.secs);
+                }
+                _pendingThrow = null;
+            }
+            if (_lastChargeState !== null && state !== _lastChargeState && state === 2) {
+                _chargeStartedAt = Date.now();
             }
             _lastChargeState = state;
             _updateManualFinishBanners(d);

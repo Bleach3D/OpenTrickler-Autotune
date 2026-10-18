@@ -11,6 +11,29 @@ compares the version strings literally.
 
 ## [Unreleased]
 
+## [v1.2.2] — 2026-10-18
+
+### Fixed
+
+- **Charge result decided before the scale had settled.** The throw history in
+  the web UI logged the live reading the moment charging stopped, so a throw
+  could be logged good and then settle out of tolerance (or the other way
+  round). It is now logged when the "Remove Cup" step ends, with the
+  firmware's last settled weight.
+- **LED stayed red after a transient overshoot.** The final weight only ever
+  moved up, so a short upward swing of the scale stuck as an overcharge even
+  after the reading settled back into the band. The latest settled reading
+  now wins in both directions (late powder is still picked up); settling
+  during "Remove Cup" needs 5 instead of 3 stable samples.
+- Final-weight settling waits up to 3 s instead of 1.2 s before falling back
+  to an unsettled average (it still continues as soon as the scale is stable).
+- The Charge Timeline is closed when the cup is lifted (or the step ends)
+  with the settled weight, instead of on entering "Remove Cup".
+- **Pre-charge dumped by the post-trickle top-up.** With pre-charge enabled,
+  topping up a slight undercharge opened the gate and dropped the pre-charge
+  waiting on it into the pan. No top-up is attempted while a pre-charge sits
+  on the gate; the undercharge stays flagged instead.
+
 ## [v1.2.1] — 2026-10-18
 
 ### Fixed

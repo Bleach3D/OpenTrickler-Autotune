@@ -143,9 +143,12 @@ typedef enum {
 
 static const float SCALE_MAX_REASONABLE_WEIGHT_GN = 10000.0f;
 static const uint8_t FINAL_WEIGHT_SETTLE_SAMPLE_COUNT = 5;
+static const uint32_t FINAL_WEIGHT_SETTLE_TIMEOUT_MS = 3000;
 static const float CHARGE_RESULT_TOLERANCE_GN = 0.0205f;
 static const uint32_t CHARGE_PROGRESS_ORANGE = 0xFF8000ul;
 
+// Set while a pre-charge sits on the closed servo gate for the next charge.
+static bool precharge_loaded_on_gate = false;
 static bool last_final_weight_valid = false;
 static float last_final_weight_gn = 0.0f;
 static bool live_runtime_model_active = false;
@@ -361,10 +364,13 @@ static void charge_mode_update_true_final_measurement(float measurement) {
         live_post_finish_peak_weight_gn = measurement;
     }
 
-    if (!last_final_weight_valid || measurement > last_final_weight_gn) {
-        last_final_weight_gn = measurement;
-        last_final_weight_valid = true;
-    }
+    // Latest reading wins, in both directions. Callers feed settled means once
+    // the motors are stopped, so late powder still raises the result, while a
+    // transient overshoot of the scale no longer sticks as an overcharge after
+    // the reading settles back into the band. The peak is kept above for
+    // telemetry only.
+    last_final_weight_gn = measurement;
+    last_final_weight_valid = true;
 
     // Keep final/peak truth separate from phase tail telemetry. Fine tail is
     // captured by mark_fine_stop() immediately after the motor stops; updating
@@ -1005,7 +1011,7 @@ static bool charge_mode_salvage_undercharge(float* measurement_io) {
         last_charge_elapsed_seconds = (float)((now - charge_start_tick) * portTICK_PERIOD_MS) / 1000.0f;
 
         float settled_weight = *measurement_io;
-        if (charge_mode_capture_settled_measurement(1200,
+        if (charge_mode_capture_settled_measurement(FINAL_WEIGHT_SETTLE_TIMEOUT_MS,
                                                     FINAL_WEIGHT_SETTLE_SAMPLE_COUNT,
                                                     &settled_weight)) {
             charge_mode_update_true_final_measurement(settled_weight);
@@ -1228,6 +1234,7 @@ void charge_mode_wait_for_complete() {
     if (servo_gate.eeprom_servo_gate_config.servo_gate_enable) {
         servo_gate_set_ratio(SERVO_GATE_RATIO_OPEN, false);
     }
+    precharge_loaded_on_gate = false;
 
     char target_weight_string[WEIGHT_STRING_LEN];
     // Always 2 decimal places here regardless of the configured
@@ -3572,6 +3579,7 @@ void charge_mode_wait_for_complete() {
                         charge_mode_config.eeprom_charge_mode_data.precharge_speed_rps);
         vTaskDelay(pdMS_TO_TICKS(charge_mode_config.eeprom_charge_mode_data.precharge_time_ms));
         charge_mode_command_motor(SELECT_COARSE_TRICKLER_MOTOR, 0);
+        precharge_loaded_on_gate = true;
     }
     else {
         vTaskDelay(pdMS_TO_TICKS(20));
@@ -3594,7 +3602,7 @@ void charge_mode_stabilize() {
         // Fixed configured wait
         vTaskDelay(pdMS_TO_TICKS(charge_mode_config.eeprom_charge_mode_data.stabilization_time_ms));
         last_final_weight_valid = charge_mode_capture_settled_measurement(
-            1200,
+            FINAL_WEIGHT_SETTLE_TIMEOUT_MS,
             FINAL_WEIGHT_SETTLE_SAMPLE_COUNT,
             &last_final_weight_gn);
     } else {
@@ -3628,7 +3636,12 @@ void charge_mode_stabilize() {
         charge_mode_update_true_final_measurement(last_final_weight_gn);
     }
 
-    if (last_final_weight_valid && !last_charge_was_ai_tuning) {
+    // Topping up opens the gate, which would dump the pre-charge waiting on it
+    // into the pan (a large overcharge, and the next charge starts without
+    // its pre-charge). With the gate closed the fine trickler can't reach the
+    // pan either, so leave a slight undercharge flagged for the operator.
+    if (last_final_weight_valid && !last_charge_was_ai_tuning &&
+        !precharge_loaded_on_gate) {
         charge_mode_salvage_undercharge(&last_final_weight_gn);
         if (charge_mode_config.charge_mode_state == CHARGE_MODE_EXIT) {
             return;
@@ -3653,7 +3666,7 @@ void charge_mode_wait_for_cup_removal() {
     }
     else {
         current_measurement_valid = charge_mode_capture_settled_measurement(
-            1200,
+            FINAL_WEIGHT_SETTLE_TIMEOUT_MS,
             FINAL_WEIGHT_SETTLE_SAMPLE_COUNT,
             &current_measurement);
     }
@@ -3677,8 +3690,22 @@ void charge_mode_wait_for_cup_removal() {
                                    : 0.0f,
                                result_tolerance);
 
-    // Close the charge timeline with the settled result
-    charge_timeline_finish(result_measurement_valid, result_measurement);
+    // The charge timeline is closed only once the result can no longer change
+    // (cup lifted, step left or aborted), so it records the settled weight
+    // rather than whatever the scale showed on entering this step.
+    bool timeline_finished = false;
+    auto finish_timeline = [&]() {
+        if (timeline_finished) {
+            return;
+        }
+        timeline_finished = true;
+        if (last_final_weight_valid) {
+            charge_timeline_finish(true, last_final_weight_gn);
+        }
+        else {
+            charge_timeline_finish(result_measurement_valid, result_measurement);
+        }
+    };
 
     // Deferred AI tuning recording - use settled measurement for accurate weight
     bool ai_characterization_recorded = false;
@@ -3717,6 +3744,7 @@ void charge_mode_wait_for_cup_removal() {
     }
 
     if (last_charge_was_ai_tuning && ai_characterization_recorded) {
+        finish_timeline();
         if (ai_tuning_is_active()) {
             bool ai_tare_ready = charge_mode_force_zero_and_wait_for_ai();
             if (charge_mode_config.charge_mode_state == CHARGE_MODE_EXIT) {
@@ -3751,6 +3779,7 @@ void charge_mode_wait_for_cup_removal() {
         // Non block waiting for the input
         ButtonEncoderEvent_t button_encoder_event = button_wait_for_input(false);
         if (button_encoder_event == BUTTON_RST_PRESSED) {
+            finish_timeline();
             charge_mode_config.charge_mode_state = CHARGE_MODE_EXIT;
             return;
         }
@@ -3784,7 +3813,7 @@ void charge_mode_wait_for_cup_removal() {
             const float truth_sd_limit =
                 fmaxf(charge_mode_config.eeprom_charge_mode_data.set_point_sd_margin * 1.75f, 0.025f);
             truth_buffer.enqueue(current_weight);
-            if (truth_buffer.getCounter() >= 3 &&
+            if (truth_buffer.getCounter() >= FINAL_WEIGHT_SETTLE_SAMPLE_COUNT &&
                 truth_buffer.getSd() < truth_sd_limit) {
                 charge_mode_update_true_final_measurement(truth_buffer.getMean());
             }
@@ -3807,6 +3836,7 @@ void charge_mode_wait_for_cup_removal() {
             // charge_mode_apply_result_state()'s own not-ready path (see
             // above, measurement_valid=false) rather than duplicating it.
             charge_mode_apply_result_state(suppress_charge_result, false, 0.0f, result_tolerance);
+            finish_timeline();
         }
 
         // Generate stop condition: the cup is back on the scale, empty, and
@@ -3833,6 +3863,8 @@ void charge_mode_wait_for_cup_removal() {
         // Wait for next measurement
         vTaskDelayUntil(&last_sample_tick, pdMS_TO_TICKS(300));
     }
+
+    finish_timeline();
 
     // Deferred ML recording uses the truthful post-finish result, including delayed
     // powder that appeared while the cup was still on the scale.
