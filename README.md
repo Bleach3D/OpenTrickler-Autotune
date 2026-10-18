@@ -19,7 +19,6 @@ tuning and charge history.
 - [Features](#features)
 - [Troubleshooting](#troubleshooting)
 - [Credits and license](#credits-and-license)
-- [For developers](#for-developers)
 
 ## What you need
 
@@ -161,34 +160,3 @@ This firmware builds on the work of:
   Finish, Reverse Tube
 
 Licensed under GPL-3.0 like the original, see [LICENSE](LICENSE).
-
-## For developers
-
-**Build** (Git, CMake, Ninja, ARM GCC toolchain, Python 3):
-
-```sh
-git clone --recursive https://github.com/Bleach3D/OpenTrickler-Autotune.git
-cd OpenTrickler-Autotune
-cmake -B build-pico2w-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico2_w
-cmake --build build-pico2w-release
-```
-
-Output: `build-pico2w-release/app.uf2` (USB) and `app.bin` (OTA, e.g. with
-`python tools/ota_upload.py --host <ip> --bin build-pico2w-release/app.bin --apply`).
-Building for `pico_w` is rejected on purpose.
-
-**Release** (versions follow [Semantic Versioning](https://semver.org/)):
-
-1. Move the `[Unreleased]` entries in [CHANGELOG.md](CHANGELOG.md) under a
-   new version heading.
-2. Put the same version (e.g. `v1.3.0`) into `RELEASE_VERSION` and commit.
-3. Tag the commit (`git tag -a v1.3.0 -m "v1.3.0"`) and push the tag.
-4. Publish a GitHub release with exactly that name. The
-   *publish-update-manifest* workflow builds the firmware and attaches the
-   `.uf2`, `app.bin` and `manifest.json` that the on-device update check
-   uses. It refuses to run if the tag and `RELEASE_VERSION` differ.
-
-**Layout:** `src/` firmware (charge mode, AI model, REST API, web interface in
-`src/html/`), `targets/` board configuration, `library/` submodules
-(Pico SDK, FreeRTOS, u8g2, Trinamic), `tools/` OTA and release helpers,
-`sim/` PC simulator, `tests/` tests, `docs/` documentation site.
