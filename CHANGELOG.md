@@ -11,6 +11,15 @@ compares the version strings literally.
 
 ## [Unreleased]
 
+## [v1.2.3] — 2026-10-18
+
+### Removed
+
+- **Basic / Advanced settings mode** (added in v1.2.0). All settings and
+  settings pages are always shown again; the toggle, the "N advanced settings
+  hidden" hints and the ADV tags are gone. The grouped Profile page with its
+  collapsible sections stays.
+
 ## [v1.2.2] — 2026-10-18
 
 ### Fixed

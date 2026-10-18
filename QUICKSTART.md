@@ -34,9 +34,6 @@ If a version resets settings, the changelog says so.
 3. After it has joined your network, open its address (shown on the display,
    or in your router's client list) in a browser.
 
-The web interface starts in **Basic** mode, which hides expert settings.
-Switch to **Advanced** in the settings header when you need them.
-
 ## 3. Create a profile
 
 Keep **one profile per powder / tube / scale combination**. A profile tuned

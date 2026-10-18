@@ -120,9 +120,8 @@ rather than adjusting individual settings by hand.
 - **Reverse Tube**: briefly reverses a tube after it stops to prevent
   dribbling.
 - **Adjustable tolerance** and an **accuracy vs. speed** slider per profile.
-- **Web interface** with a Basic and an Advanced mode (Basic hides expert
-  settings), Charge Timeline, throw history, and settings for motors, scale,
-  LEDs and servo gate.
+- **Web interface** with Charge Timeline, throw history, and settings for
+  motors, scale, LEDs and servo gate.
 - **On-device menu**: start PID Tuning and AI Tuning from the encoder,
   save or discard the result on the device. The reset button goes back one
   page.
