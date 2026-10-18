@@ -11,6 +11,44 @@ compares the version strings literally.
 
 ## [Unreleased]
 
+Taken over from
+[thomaspember1990/OpenTrickler-Firmware](https://github.com/thomaspember1990/OpenTrickler-Firmware)
+(commits up to `9288faa`).
+
+### Added
+
+- **Learn From Throws (PID controller).** A per-profile switch in the
+  Profile page's "Stop Thresholds" group that learns the coarse and fine stop
+  thresholds from your own charges. After every PID charge it looks at how
+  much powder landed after each stop (settled weight, before any top-up) and
+  adjusts that profile's thresholds: an overthrow moves the stop earlier at
+  once, a short charge only nudges it later, and the spread of the tails is
+  taken into account, not just their average. Starts from the profile's own
+  thresholds and settles in roughly 5–10 charges. Shows the learned values,
+  the last result, an adjustable fine reserve and a reset button. Off by
+  default; not used by the Adaptive controller or during AI tuning. New REST
+  endpoint `/rest/learn_from_throws`; new EEPROM region at 18K, so no
+  existing settings move or reset.
+- Simulator: `ottrickler_ai_char` (full AI characterization through the
+  real charge-mode code) and `ottrickler_learn` (PID charges with Learn From
+  Throws); see `sim/README.md`.
+
+### Fixed
+
+- **No setup hotspot when the motor drivers don't answer.** A motor driver
+  init error (no motor supply yet, wiring fault) stopped the start-up before
+  Wi-Fi came up, so a new build could not be configured. The hotspot and web
+  interface now start anyway; only the menu and charging stay off until the
+  drivers respond.
+- **PID Tuning:** pressing Start in the web interface while the result
+  screen was still shown dropped back to the main menu; it now starts a new
+  run. Starting a charge, AI tuning or machine calibration from the web is
+  refused while PID Tuning runs instead of leaving the state stuck.
+- Setup hotspot DNS server drops malformed queries instead of answering
+  with stray memory.
+- AI tuning settings can't be changed while a characterization runs, and NaN
+  values in AI/PID tuning settings are rejected.
+
 ## [v1.2.4] — 2026-10-18
 
 ### Fixed
@@ -174,27 +212,6 @@ Base: `Opentrickler_ML` `2026.07.12-beta.14`.
 ## [Unreleased]
 
 ### Added
-
-- **Learn From Throws (PID controller)** — a per-profile switch on the
-  Profile page that learns the coarse and fine stop thresholds from your own
-  charges instead of keeping them fixed. After every PID charge it measures
-  how much powder landed after each stop (the settled weight before any
-  top-up) and adjusts that profile's two thresholds: an overthrow moves the
-  stop earlier at once, a short charge only nudges it later, and both
-  thresholds allow for how much the tails vary from charge to charge rather
-  than just their average. It starts from the profile's own thresholds and
-  settles in roughly 5–10 charges; the page shows the learned values, the
-  last charge's result, an adjustable fine reserve and a reset button.
-  Separate from AI Tuning (no characterization run, AI model untouched) and
-  ignored by the Adaptive controller. Off by default. New REST endpoint
-  `/rest/learn_from_throws`; new EEPROM region
-  (`EEPROM_LEARN_FROM_THROWS_BASE_ADDR`, 18K), brand new so nothing existing
-  moves. The algorithm (`src/throw_learner.c`) is the same code the
-  simulator's `ottrickler_learn` runs.
-- **Simulator: `ottrickler_ai_char` and `ottrickler_learn`** — run a full AI
-  characterization through the real charge-mode code with a stall watchdog,
-  and run PID charges with Learn From Throws on or off (optionally with a
-  mid-run powder change). See `sim/README.md`.
 
 - **PID Tuning — automatic PID/speed characterization** — new dedicated
   "PID Tuning" settings page (the bottom-nav's 4th icon swaps to it
@@ -365,29 +382,6 @@ Base: `Opentrickler_ML` `2026.07.12-beta.14`.
   cup" while the charge was still well under target.
 
 ### Fixed
-
-- **No setup hotspot when the motor drivers don't answer.** A motor
-  driver init error (e.g. no motor supply connected yet, or a wiring fault)
-  was handled before the scheduler started, in a loop that never returns, so
-  Wi-Fi never started and a new build could not be configured at all. The
-  error screen now runs as its own task: the hotspot and web portal come up
-  as normal, and only the menu (and so charging) stays off until the drivers
-  respond.
-- **AI characterization stalled on "Remove Cup" after the first coarse
-  sample.** The coarse stop weight was read with a helper that only accepts
-  weights above 3% of the charge target, which characterization pulses are
-  deliberately far below, so every drop was rejected. It now uses the raw
-  reading, and the measured on-time no longer includes that helper's wait.
-- **Setup hotspot DNS replies used a dead stack variable**, so phones could
-  be sent to a garbage address instead of 192.168.4.1. Malformed DNS
-  queries are now dropped instead of answered with stray memory.
-- **PID Tuning: pressing Start on the web page while the result screen was
-  still up only exited to the main menu.** It now starts the new run.
-  Starting a charge, AI tuning or machine calibration from the web is
-  refused while PID Tuning is running instead of being silently lost.
-- **AI tuning settings can no longer be changed mid-characterization**, and
-  NaN values (from a crafted request or a corrupted setting) are rejected
-  instead of passing every range check.
 
 - **"Remove Cup" could get stuck permanently after the cup was returned**
   — the loop waiting for the cup to come back used the same "large
