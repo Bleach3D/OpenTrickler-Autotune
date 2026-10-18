@@ -1,316 +1,194 @@
 # OpenTrickler Autotune
 
-Firmware for the OpenTrickler Raspberry Pi Pico 2 W / RP2350 controller, based on
-[thomaspember1990/OpenTrickler-Firmware](https://github.com/thomaspember1990/OpenTrickler-Firmware)
-(TP Custom Rifle Parts fork, see below for its full lineage). Licensed under GPL-3.0 like the original.
-
-## Changes in this version
-
-**Fixes**
-- **AP setup hotspot:** the DNS server in `access_point_mode_start()` was declared as a local variable shadowing the static one; lwIP kept a dangling pointer to stack memory, which most likely crashed the board as soon as a client connected. Wireless task stack raised from 512 to 1024 words.
-- **AI characterization stalled on "Remove Cup":** the coarse stop snapshot used the normal-charge plausibility check (> 3 % of the charge target), so the small early characterization pulses were rejected and never recorded. The AI sample path now uses the raw stop measurement.
-- **Microstepping changed motor speed:** a microstep / current / R-sense change from the web UI only updated the step-rate maths, the TMC2209 kept its old settings until reboot. Now applied to the driver immediately (with MRES read-back). Minimum step rate lowered from 100 to 10 steps/s so the fine trickler no longer stops at its minimum speed with 64 or fewer microsteps.
-
-**Features / UI**
-- Web UI back to the original OpenTrickler (DaisyUI default) look, without branding; theming/Appearance page removed; original OpenTrickler icons.
-- "OpenTrickler Autotune" header in the web UI and an animated 10 s boot splash on the display (any button skips it; it runs while WiFi connects in the background).
-- PID Autotune and AI tuning (powder characterization, machine calibration) can be started from the encoder menu, with save / discard of the result on the device.
-- Reset button goes one page back in the menus.
-- Up to 5 known WiFi networks: scans and joins the strongest visible one, then tries hidden ones, then falls back to the setup hotspot.
-- Cleanup speed limited to +/-10 rps in 0.5 rps steps.
-- OTA update source defaults to this repository (`Bleach3D/OpenTrickler-Autotune`).
-
-## Versioning and releases
-
-Semantic Versioning (`vMAJOR.MINOR.PATCH`), see [CHANGELOG.md](CHANGELOG.md).
-The firmware shows its version under *Settings > Version* on the display and in the web UI.
-
-To release:
-1. Move the `[Unreleased]` entries in `CHANGELOG.md` under a new version heading.
-2. Put the same version (e.g. `v1.1.0`) into `RELEASE_VERSION` and commit.
-3. Tag that commit (`git tag -a v1.1.0 -m "v1.1.0"`) and push the tag.
-4. Publish a GitHub release for the tag. The *publish-update-manifest* workflow builds the
-   firmware and attaches `app.uf2`, `app.bin` and `manifest.json` (used by the on-device update check).
-   It refuses to run if the tag and `RELEASE_VERSION` differ.
-
----
-
-## Original README (TP Custom Rifle Parts fork)
-
-Public beta firmware for the OpenTrickler Raspberry Pi Pico 2 W / RP2350 controller, with profile-aware flow characterization, machine calibration, automatic runtime learning, REST status endpoints, and OTA staging.
-
-This is the **TP Custom Rifle Parts** fork of
-[WhoKilledBambiLabs/Opentrickler_ML](https://github.com/WhoKilledBambiLabs/Opentrickler_ML),
-which is itself a fork of the original
-[Eamars/OpenTrickler](https://github.com/eamars/OpenTrickler). On top of
-upstream's AI characterization and machine calibration, this fork adds
-per-profile charge-mode settings, a user-selectable PID vs. Adaptive
-controller with an AI-suggested PID baseline, Manual Finish for
-large-kernel powders, Reverse Tube anti-dribble, configurable UI theming,
-and a number of AI tuning accuracy fixes. See
-[CHANGELOG.md](CHANGELOG.md) for the full list, and
-[QUICKSTART.md](QUICKSTART.md) to get started.
-
-> Early beta: this firmware controls reloading equipment. Verify every charge with a calibrated scale, supervise all operation, and keep a known-good UF2 rollback image available.
-
-## Project Status
-
-- Fork base: `Opentrickler_ML` `2026.07.12-beta.14`
-- Supported controller: Raspberry Pi Pico 2 W / RP2350 only
-- Unsupported controller: Raspberry Pi Pico W / RP2040
-- Repository status: public beta, early release
-- Documentation site: [docs/index.html](docs/index.html)
-- Getting started: [QUICKSTART.md](QUICKSTART.md)
-- What's changed in this fork: [CHANGELOG.md](CHANGELOG.md)
-
-## Pico 2 W / RP2350 Only
-
-This firmware intentionally does not support the original Pico W / RP2040 controller.
-
-The current ML firmware combines AI characterization, runtime learning, REST telemetry, OTA staging, Wi-Fi portal code, scale drivers, and recovery logic. That feature set now exceeds the RP2040's 256 KB RAM budget; the Pico W build overflows RAM during linking. Pico 2 W / RP2350 provides 512 KB RAM and is the supported hardware baseline for this beta.
-
-The build system enforces this. Any attempt to configure with `-DPICO_BOARD=pico_w` fails immediately with a clear message instead of producing a risky or partial firmware image.
-
-## Recommended Fine Tube
-
-This firmware pairs especially well with the ultra-low-flow small fine tube from the original Eamars OpenTrickler hardware repository: [Ultra Low Flow Fine Trickler Tube - Scaled to 99.7 Percent.stl](https://github.com/eamars/OpenTrickler/blob/main/STL/OpenTrickler/Ultra%20Low%20Flow%20Fine%20Trickler%20Tube%20-%20Scaled%20to%2099.7%20Percent.stl).
-
-For this ML firmware, the ultra-low-flow tube is the preferred fine tube because its slower, smoother feed gives the controller far more precision during the final approach, recovery, and `micro_heal` phases. Other fine tube designs may work, but tube geometry changes flow and tail behavior. Create a separate profile and rerun characterization and machine calibration after changing tube design, powder, scale, or target range.
-
-## What Is Different From Original OpenTrickler Firmware
-
-This branch is based on the OpenTrickler controller firmware, but the ML beta target is Pico 2 W / RP2350 only. It adds an adaptive tuning layer around the existing charge workflow.
-
-- Adds AI flow characterization for coarse, trim, fine, and micro-recovery behavior.
-- Adds machine calibration for scale response, settle timing, open-loop flow, and tail behavior.
-- Saves learned models per profile instead of relying only on fixed motor settings.
-- Records runtime observations during normal throws and applies them as temporary phase-specific guards without rewriting characterization.
-- Adds automatic phase-specific safety guards from recent coarse, fast-finish, and recovery results.
-- Adds a motor-off `tail_drain` observation before recovery so powder already in flight is not mistaken for recovery delivery.
-- Adds guarded pulse recovery when recent recovery behavior is overthrow-prone.
-- Adds REST endpoints for AI status, model history, charge state, system information, and OTA staging.
-- Adds a web-portal AI tuning panel for characterization, calibration, and save/apply.
-- Moves the ML beta hardware baseline to Pico 2 W / RP2350 because RP2040 RAM is no longer sufficient.
-- Fixes and hardens several AI telemetry and recovery behaviors found during beta testing.
-
-## What This Fork Adds On Top Of Opentrickler_ML
-
-In addition to the above, the TP Custom Rifle Parts fork adds:
-
-- A selectable **Controller**: PID (default — profile-editable gains, with
-  AI characterization producing a Suggested PID Baseline you review and
-  apply) or the legacy Adaptive controller from upstream.
-- **Per-profile charge-mode settings** — stop thresholds, tolerances,
-  Manual Finish, Reverse Tube, and LED colours are saved per profile
-  instead of globally.
-- **Manual Finish** for large-kernel powders whose kernel size is close to
-  or larger than the configured Accepted Charge Tolerance.
-- **Reverse Tube** anti-dribble — briefly reverses the coarse and/or fine
-  motor after its own genuine final stop.
-- A configurable **Accepted Charge Tolerance** (previously hardcoded) and
-  kernel-weight-aware finishing, with a manual kernel-weight override.
-- An **Accuracy vs. Speed** bias slider per profile.
-- Full **Export/Import** of a profile's base config, charge-mode settings,
-  and kernel weight, for backup and transfer between controllers.
-- Independent **background and button colour** theming with presets.
-- TP Custom Rifle Parts branding (web portal and boot splash).
-- Fixes to AI-tuning settle timing and to the Suggested PID Baseline's
-  handling of different trickler tube sizes — see
-  [CHANGELOG.md](CHANGELOG.md) for details.
-
-See [CHANGELOG.md](CHANGELOG.md) for the complete, dated list, and
-[QUICKSTART.md](QUICKSTART.md) for how to use these features.
-
-## Feature Overview
-
-### Profile-Aware AI Model
-
-Each profile can hold its own learned model. Use separate profiles for different powders, tube setups, scale behavior, or hardware changes. A model that works well for one powder/setup should not be assumed to be correct for another.
-
-### Characterization
-
-Characterization measures how powder moves through the current machine and profile. It samples coarse and fine behavior, estimates flow and tail, builds a finish plan, and ends in a `ready_to_save` state when the working model can be applied to the selected profile.
-
-In practical terms, characterization is the first learning pass for a powder/profile. It temporarily takes over charge mode and runs controlled motor pulses while the scale records how much powder actually arrived, how much arrived after the motor stopped, and how long the scale took to show the change.
-
-Default characterization plan:
-
-| Stage | Motor | Default samples | Default budget | Default sample target | What it learns |
-| --- | --- | ---: | ---: | ---: | --- |
-| `characterizing_coarse` | Coarse only | 12 | 120 gn | 8.0 gn | Bulk speed, coarse flow curve, coarse tail, and a lower-tail trim/coarse speed. |
-| `characterizing_fine` | Fine only | 12 | 36 gn | 1.75 gn | Fine flow curve, fine tail, fast-finish behavior, and the first micro/recovery samples. |
-
-The fine stage reserves its first four low-speed samples for recovery behavior. Those samples use fine speeds around `0.08`, `0.12`, `0.20`, and `0.35` rps with longer motor-on windows so the firmware can learn near-target `micro_heal` behavior instead of treating the fine tube as only a fast finishing motor.
-
-Characterization produces a working model, not an automatically trusted model. Save it only after the session reaches `ready_to_save` and the samples were clean.
-
-### Machine Calibration
-
-Machine calibration runs after a characterization model exists. It measures scale/sample timing, response delay, settle behavior, coarse tail, fine tail, open-loop flow, and handoff margins so production throws can make safer decisions.
-
-Machine calibration is the second pass. It starts from a saved characterization model, then measures the real machine timing around that model: scale lag, first response time, settle time, post-stop tail, uncertainty, open-loop coarse/fine flow, and safe handoff margins.
-
-Default calibration plan:
-
-| Stage | Motor | Default samples | Default budget guard | Motor-on pattern | What it learns |
-| --- | --- | ---: | ---: | --- | --- |
-| `calibrating_coarse` | Coarse only | 8 | max(80 gn, 65% of coarse budget) | 250, 450, 650, 850 ms at production speed, then repeated at trim speed | Scale response, coarse settle, coarse tail, trim/bulk flow, and uncertainty. |
-| `calibrating_fine` | Fine only | 8 | max(12 gn, 45% of fine budget) | 500, 800, 1100, 1400 ms at fine speed, then 2500, 3500, 5000, 7000 ms at recovery speed | Fine response, fine settle, fine tail, micro-flow, and post-finish watch timing. |
-
-Calibration needs at least three valid coarse and three valid fine samples. When it finishes, save/apply it just like characterization. The saved model then contains both powder-flow characterization and machine timing calibration.
-
-### Runtime Learning
-
-During normal production, the firmware observes final error, phase timing, stop weights, recovery delivery, and stall count. These observations drive a rolling runtime controller. Characterization and machine calibration remain stable until the operator explicitly reruns them.
-
-### Automatic Runtime Safety
-
-Beta 11 keeps runtime evidence separate from the characterized machine model:
-
-- Stable, accurate history may tighten a stop guard.
-- Unstable or overthrow-prone history may widen a guard immediately, but never tighten it.
-- Fast-finish, recovery, and coarse-handoff outcomes are evaluated separately.
-- Complete powder arrival after fine stop is included in the fast-finish tail guard.
-- Powered coarse top-up is removed; the controller observes the complete motor-off coarse tail before fine control begins.
-- Near-target underthrows wait through a calibrated motor-off tail-drain period before recovery starts.
-- Recovery uses measured delivered flow to calculate bounded approach and micro doses.
-- No-progress pulses increase dose within an eight-pulse and 15-second recovery bound.
-
-Characterized production motor speeds remain unchanged while these guards are active. Runtime throws update only the rolling observation window, preventing production noise from drifting the saved characterization.
-
-### Full AI Tuning Reference
-
-The complete characterization, calibration, model, runtime observation, and REST parameter reference is published here:
-
-- [AI tuning reference](https://whokilledbambilabs.github.io/Opentrickler_ML/ai-tuning-reference.html)
-
-Key adjustable AI configuration parameters:
-
-| Parameter | Default | Range | Meaning |
-| --- | ---: | ---: | --- |
-| `coarse_budget_gn` | 120 | 20-500 | Maximum total coarse powder used during characterization before the stage can stop. |
-| `fine_budget_gn` | 36 | 5-150 | Maximum total fine powder used during characterization before the stage can stop. |
-| `coarse_sample_count` | 12 | 2-12 | Planned coarse characterization samples. |
-| `fine_sample_count` | 12 | 2-12 | Planned fine characterization samples. |
-| `coarse_sample_target_gn` | 8.0 | 2-50 | Target delivered powder per coarse characterization sample before safety limits adjust it. |
-| `fine_sample_target_gn` | 1.75 | 0.2-10 | Target delivered powder per fine characterization sample before safety limits adjust it. |
-| `noise_margin` | 0.05 | 0.005-0.25 | Minimum useful scale movement used to filter tiny/noisy samples. |
-| `time_cost_weight` | 1.0 | 0.1-20 | Model scoring weight for speed/time preference. |
-| `error_cost_weight` | 8.0 | 0.1-50 | Model scoring weight for tail/error avoidance. |
-
-Normal users should leave these defaults alone until they have a saved rollback model and enough repeatable test data to justify changing them.
-
-### OTA Staging
-
-The firmware can stage an `app.bin` over Wi-Fi, validate CRC32, and apply it on supported flash layouts. USB UF2 flashing remains the safest first-install and rollback method.
-
-## Creating A Profile
-
-1. Open the OpenTrickler web portal or the local controller UI.
-2. Go to Settings and choose a profile slot.
-3. Name the profile for the powder/setup, for example `Varget 36.5` or `H4350 short tube`.
-4. Set or copy the baseline motor parameters you trust.
-5. Save the profile before running characterization.
-6. Keep one profile per powder/setup/tube/scale combination whenever practical.
-
-When changing powder, tube geometry, scale, gate behavior, or target range, create a new profile or re-characterize the existing one.
-
-## Running Characterization
-
-1. Connect the controller to 2.4 GHz Wi-Fi and open the web portal.
-2. Open Settings, then AI Tuning.
-3. Select the correct profile.
-4. Enter the normal target charge weight for that setup.
-5. Confirm the scale is connected, stable, and zeroed with the pan workflow you normally use.
-6. Start characterization and follow the normal remove/return pan prompts.
-7. Let the controller complete the planned coarse and fine samples.
-8. Wait for the state to reach `ready_to_save`.
-9. Apply/save the model to the selected profile.
-
-Do not use characterization results if the scale was unstable, powder bridged, the pan workflow was interrupted, or the wrong profile was selected.
-
-## Running Machine Calibration
-
-1. Save a characterization model first.
-2. Select the same profile and target charge weight.
-3. Start machine calibration from the AI Tuning panel.
-4. Let the controller run the timing samples without changing the setup.
-5. Save/apply the calibration when complete.
-6. Run a small supervised production set and confirm behavior before trusting the model.
-
-Calibration is most useful after hardware changes, tube changes, scale changes, or when handoff/tail behavior looks wrong.
-
-## Basic Use
-
-1. Select the correct profile.
-2. Enter the target charge weight in grains.
-3. Place the pan on the scale and wait for zero.
-4. Let the controller charge, settle, and recover if needed.
-5. Remove the pan only when prompted.
-6. Verify every charge.
-7. Watch for repeatable under/over behavior; re-characterize if the setup no longer matches the saved model.
-
-## Build From Source
-
-Install Git, CMake, Ninja, the ARM GCC toolchain, Python 3, and the Raspberry Pi Pico SDK. The included PowerShell helper expects the Pico SDK environment used by the Raspberry Pi Pico extension.
-
-```powershell
-git clone <repository-url-from-the-github-code-button>
-cd Opentrickler_ML
-git submodule update --init --recursive
-.\configure_env.ps1
+Firmware for the [OpenTrickler](https://github.com/eamars/OpenTrickler) powder
+trickler on a **Raspberry Pi Pico 2 W**. It tunes itself to your powder and
+machine to throw accurate charges quickly, with a web interface for setup,
+tuning and charge history.
+
+> **Safety first.** This firmware runs reloading equipment. Check every charge
+> on a calibrated scale, stay with the machine while the motors are running,
+> and keep a known-good firmware file so you can roll back.
+
+## Contents
+
+- [What you need](#what-you-need)
+- [Installing](#installing)
+- [Updating](#updating)
+- [First setup](#first-setup)
+- [Everyday use](#everyday-use)
+- [Features](#features)
+- [Troubleshooting](#troubleshooting)
+- [Credits and license](#credits-and-license)
+- [For developers](#for-developers)
+
+## What you need
+
+- An assembled OpenTrickler (trickler, motors, scale interface, 128x64
+  display with encoder), built and wired according to the
+  [original OpenTrickler hardware documentation](https://github.com/eamars/OpenTrickler).
+- A **Raspberry Pi Pico 2 W** (RP2350) as the controller. The older Pico W
+  (RP2040) is **not supported**; it doesn't have enough memory for this
+  firmware.
+- A supported scale (for example A&D FX-i series, see [manuals/](manuals/)).
+- A 2.4 GHz Wi-Fi network for the web interface (optional, but recommended).
+
+**Recommended fine tube:** the
+[Ultra Low Flow Fine Trickler Tube](https://github.com/eamars/OpenTrickler/blob/main/STL/OpenTrickler/Ultra%20Low%20Flow%20Fine%20Trickler%20Tube%20-%20Scaled%20to%2099.7%20Percent.stl)
+from the original OpenTrickler repository. Its slow, even flow gives the
+controller the most precision on the final approach. Other tubes work too,
+but give each tube its own profile.
+
+## Installing
+
+1. Download the latest `OpenTrickler-Firmware-vX.Y.Z.uf2` from the
+   [Releases page](https://github.com/Bleach3D/OpenTrickler-Autotune/releases/latest).
+2. Disconnect motor power.
+3. Hold the **BOOTSEL** button on the Pico 2 W and plug in the USB cable.
+   Release the button once a USB drive named `RP2350` appears.
+4. Copy the `.uf2` file onto that drive. The Pico restarts by itself once the
+   copy is done.
+5. Check the version under **Settings → Version** on the display.
+
+## Updating
+
+Once the firmware is installed, you can update over Wi-Fi:
+
+**Web interface → Settings → Firmware Update → Check for Updates**
+
+The controller downloads the newest release directly from GitHub, checks it
+and installs it. If an update over Wi-Fi fails, install the `.uf2` from the
+Releases page over USB as described above.
+
+What changed in each version is listed in [CHANGELOG.md](CHANGELOG.md).
+Read it before updating: some versions reset certain settings, and the
+changelog says so.
+
+## First setup
+
+[QUICKSTART.md](QUICKSTART.md) walks through every step in detail. In short:
+
+1. **Connect to Wi-Fi.** On first start the controller opens its own setup
+   hotspot (`opentrickler-…`). Connect to it with your phone or laptop and
+   enter your Wi-Fi details. Up to 5 networks can be saved; the controller
+   joins the strongest one in range. Then open the controller's address
+   (shown on the display) in a browser.
+2. **Create a profile.** Keep **one profile per powder / tube / scale
+   combination**, for example `Varget - ultra low flow tube`. A profile tuned
+   for one setup doesn't carry over to another. Choose the controller at the
+   top of the profile: **PID** (recommended) or the older **Adaptive**
+   controller.
+3. **Tune the profile** under Settings → AI / PID Tuning, or from the menu
+   on the device:
+   - **PID Tuning** (PID controller) runs a series of test throws, measures
+     flow rate and scale delay, and sets the handoff and landing speeds.
+   - **AI Tuning** (Adaptive controller) runs a characterization of how your
+     powder flows, followed by a machine calibration of scale delay,
+     settling time and powder that falls after the motor stops.
+4. **Throw a few supervised test charges** and check them before relying on
+   the profile.
+
+Re-run the tuning after changing powder, tube, scale or the target weight
+range.
+
+## Everyday use
+
+1. Select the profile that matches your current setup.
+2. Enter the target weight.
+3. Put the cup on the scale and wait for zero.
+4. Let the controller throw and settle the charge. If Manual Finish is
+   active, follow its prompts.
+5. Remove the cup **when prompted**. The LED colour shows the result:
+   green = in tolerance, yellow = under, red = over.
+6. Put the empty cup back for the next charge.
+
+The web interface shows each charge as a weight curve (Charge Timeline) and
+keeps a throw history with mean and spread.
+
+If the controller starts to be repeatedly under or over, re-run the tuning
+rather than adjusting individual settings by hand.
+
+## Features
+
+- **Two controllers per profile**: the classic OpenTrickler PID controller
+  (recommended) with automatic **PID Tuning**, or the Adaptive controller
+  that learns a model of your powder's flow through characterization and
+  machine calibration and refines it with normal charges.
+- **Pre-charge** (needs a servo gate): drops the start of the next charge
+  onto the closed gate while you handle the current cup.
+- **Manual Finish** for coarse powders whose kernels are as large as your
+  tolerance: the controller stops short and tells you how many kernels to
+  add.
+- **Reverse Tube**: briefly reverses a tube after it stops to prevent
+  dribbling.
+- **Adjustable tolerance** and an **accuracy vs. speed** slider per profile.
+- **Web interface** with a Basic and an Advanced mode (Basic hides expert
+  settings), Charge Timeline, throw history, and settings for motors, scale,
+  LEDs and servo gate.
+- **On-device menu**: start PID Tuning and AI Tuning from the encoder,
+  save or discard the result on the device. The reset button goes back one
+  page.
+- **Profile export/import** as a JSON file for backups and for moving
+  profiles between controllers.
+- **Up to 5 Wi-Fi networks**, with a setup hotspot as a fallback.
+- **Updates over Wi-Fi** directly from GitHub.
+
+## Troubleshooting
+
+- **Web interface not reachable:** check the address on the display. If no
+  saved network is in range, the controller opens its setup hotspot
+  (`opentrickler-…`) again.
+- **Charges are consistently under or over:** make sure the right profile is
+  selected and the scale is stable and zeroed, then re-run the tuning.
+- **Something went wrong after an update:** install the previous version
+  from the [Releases page](https://github.com/Bleach3D/OpenTrickler-Autotune/releases)
+  over USB (see [Installing](#installing)).
+- More help on scales and Wi-Fi: [manuals/](manuals/).
+
+Bugs and questions:
+[GitHub Issues](https://github.com/Bleach3D/OpenTrickler-Autotune/issues).
+
+## Credits and license
+
+This firmware builds on the work of:
+
+- [Eamars/OpenTrickler](https://github.com/eamars/OpenTrickler): the original
+  OpenTrickler hardware and firmware
+- [WhoKilledBambiLabs/Opentrickler_ML](https://github.com/WhoKilledBambiLabs/Opentrickler_ML):
+  AI characterization, machine calibration and runtime learning
+  ([AI tuning reference](https://whokilledbambilabs.github.io/Opentrickler_ML/ai-tuning-reference.html))
+- [thomaspember1990/OpenTrickler-Firmware](https://github.com/thomaspember1990/OpenTrickler-Firmware)
+  (TP Custom Rifle Parts): per-profile settings, PID controller, Manual
+  Finish, Reverse Tube
+
+Licensed under GPL-3.0 like the original, see [LICENSE](LICENSE).
+
+## For developers
+
+**Build** (Git, CMake, Ninja, ARM GCC toolchain, Python 3):
+
+```sh
+git clone --recursive https://github.com/Bleach3D/OpenTrickler-Autotune.git
+cd OpenTrickler-Autotune
 cmake -B build-pico2w-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico2_w
-cmake --build build-pico2w-release --config Release
+cmake --build build-pico2w-release
 ```
 
-Useful outputs:
+Output: `build-pico2w-release/app.uf2` (USB) and `app.bin` (OTA, e.g. with
+`python tools/ota_upload.py --host <ip> --bin build-pico2w-release/app.bin --apply`).
+Building for `pico_w` is rejected on purpose.
 
-- `build-pico2w-release/app.uf2`: USB BOOTSEL flashing
-- `build-pico2w-release/app.bin`: OTA upload
-- `build-pico2w-release/app.elf`: debug symbols
-- `build-pico2w-release/app.hex`: alternate flashing format
+**Release** (versions follow [Semantic Versioning](https://semver.org/)):
 
-## Flashing And OTA
+1. Move the `[Unreleased]` entries in [CHANGELOG.md](CHANGELOG.md) under a
+   new version heading.
+2. Put the same version (e.g. `v1.3.0`) into `RELEASE_VERSION` and commit.
+3. Tag the commit (`git tag -a v1.3.0 -m "v1.3.0"`) and push the tag.
+4. Publish a GitHub release with exactly that name. The
+   *publish-update-manifest* workflow builds the firmware and attaches the
+   `.uf2`, `app.bin` and `manifest.json` that the on-device update check
+   uses. It refuses to run if the tag and `RELEASE_VERSION` differ.
 
-USB first install or rollback:
-
-1. Disconnect motor power.
-2. Hold BOOTSEL while plugging in USB.
-3. Copy `app.uf2` to the `RPI-RP2` drive.
-4. Reboot and verify the firmware version.
-
-OTA after the device is already running OTA-capable firmware:
-
-```powershell
-python tools/ota_upload.py --host <device-ip-or-hostname> --bin build-pico2w-release/app.bin --apply
-```
-
-Use USB rollback if OTA fails, Wi-Fi is unstable, or the version cannot be verified after reboot.
-
-## Repository Map
-
-- `.github/workflows/cmake.yml`: GitHub Actions firmware build for Pico 2 W / RP2350.
-- `docs/`: GitHub Pages-ready public beta documentation.
-- `firmware_release_history/`: public-safe changelog, issue ledger, and release notes.
-- `library/`: embedded libraries and submodule content.
-- `manuals/`: original flashing, wireless, and scale setup material.
-- `resources/`: screenshots and diagrams used by documentation.
-- `scripts/`: helper scripts for firmware development.
-- `src/`: firmware source, REST endpoints, web portal, drivers, charge mode, OTA, and AI model code.
-- `targets/`: board and hardware target support.
-- `tests/`: local tests and validation material.
-- `tools/ota_upload.py`: Wi-Fi OTA uploader.
-- `RELEASE_VERSION`: firmware release identity consumed by version generation.
-
-## Safety Notes
-
-- This is beta firmware, not a published stable release.
-- Confirm the selected profile before charging.
-- Confirm the scale is stable and calibrated before every run.
-- Verify charges independently.
-- Keep the device attended while motors are active.
-- Keep a known-good rollback UF2 available.
-
-## License
-
-This project retains the upstream OpenTrickler firmware license. See [LICENSE](LICENSE).
+**Layout:** `src/` firmware (charge mode, AI model, REST API, web interface in
+`src/html/`), `targets/` board configuration, `library/` submodules
+(Pico SDK, FreeRTOS, u8g2, Trinamic), `tools/` OTA and release helpers,
+`sim/` PC simulator, `tests/` tests, `docs/` documentation site.

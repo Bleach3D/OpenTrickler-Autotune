@@ -1,237 +1,149 @@
-# Quick Start Guide — TP Custom Rifle Parts OpenTrickler Firmware
+# Quick Start — OpenTrickler Autotune
 
-This guide gets a Pico 2 W / RP2350 OpenTrickler controller running on this
-fork, from flashing to your first charges. It assumes the hardware
-(trickler, motors, scale interface, 128x64 display) is already built and
-wired per the original OpenTrickler hardware documentation.
+This guide takes a Pico 2 W OpenTrickler from installing the firmware to your
+first charges. It assumes the hardware (trickler, motors, scale interface,
+128x64 display with encoder) is already built and wired according to the
+[original OpenTrickler documentation](https://github.com/eamars/OpenTrickler).
 
-> This firmware controls reloading equipment. Verify every charge with a
-> calibrated scale, supervise all operation, and keep a known-good `.uf2`
-> rollback image available.
+> This firmware runs reloading equipment. Check every charge on a calibrated
+> scale, stay with the machine while the motors are running, and keep a
+> known-good `.uf2` file so you can roll back.
 
-## 1. Flash the firmware
+## 1. Install the firmware
 
-1. Disconnect motor power before flashing.
-2. Hold the **BOOTSEL** button on the Pico 2 W, then plug it into USB while
-   still holding it. Release once it appears as a `RPI-RP2` USB drive.
-3. Drag `opentrickler_ml_latest.uf2` onto the `RPI-RP2` drive.
-4. The board reboots automatically once the copy finishes.
+1. Download the latest `OpenTrickler-Firmware-vX.Y.Z.uf2` from the
+   [Releases page](https://github.com/Bleach3D/OpenTrickler-Autotune/releases/latest).
+2. Disconnect motor power.
+3. Hold the **BOOTSEL** button on the Pico 2 W and plug in the USB cable.
+   Release the button once a USB drive named `RP2350` appears.
+4. Copy the `.uf2` file onto that drive. The Pico restarts by itself.
+5. The display shows the boot animation (any button skips it) and then the
+   main menu.
 
-If you're updating an existing controller rather than flashing for the
-first time: the EEPROM layout in this build changed to support Reverse
-Tube, so **your charge-mode settings (stop thresholds, tolerances, Manual
-Finish, Reverse Tube, LED colours) will reset to defaults on first boot.**
-Your saved AI characterization models and base profile calibration are not
-affected. Re-enter your tuned values (or re-run characterization) after
-updating — see [CHANGELOG.md](CHANGELOG.md) for the full list of what
-changed.
+Updating from an older version? Check [CHANGELOG.md](CHANGELOG.md) first.
+If a version resets settings, the changelog says so.
 
-## 2. Connect to Wi-Fi and open the web portal
+## 2. Connect to Wi-Fi
 
-1. On first boot the controller starts its own setup access point — connect
-   to it from your phone or laptop and give it your 2.4 GHz Wi-Fi
-   credentials.
-2. Once it joins your network, find its address (your router's client list,
-   or the controller's own display) and open it in a browser.
-3. You should see the OpenTrickler web portal with the TP Custom Rifle
-   Parts branding.
+1. On first start the controller opens its own setup hotspot named
+   `opentrickler-…`. Connect to it with your phone or laptop.
+2. Open the web interface and enter your 2.4 GHz Wi-Fi name and password
+   under **Settings → Wireless**. You can save up to 5 networks; the controller
+   joins the strongest one in range and falls back to the setup hotspot if
+   none is available.
+3. After it has joined your network, open its address (shown on the display,
+   or in your router's client list) in a browser.
 
-## 3. Set your appearance (optional)
+The web interface starts in **Basic** mode, which hides expert settings.
+Switch to **Advanced** in the settings header when you need them.
 
-Settings → Appearance lets you set the button/accent colour and the
-background colour independently, with presets for each, or reset both to
-defaults with one button. Purely cosmetic — safe to skip.
+## 3. Create a profile
 
-## 4. Create a profile
+Keep **one profile per powder / tube / scale combination**. A profile tuned
+on one tube or powder does not carry over to another, and the controller
+cannot detect which tube is installed.
 
-Keep **one profile per powder / tube size / scale combination**. Mixing
-setups on one profile is the single biggest cause of "the AI tuning is
-inaccurate" reports — a model characterized on one trickler tube size does
-not carry over to another.
+1. Go to **Settings → Profile** and pick an empty slot.
+2. Name it for the setup, for example `Varget - ultra low flow tube`.
+3. Choose the **Controller** at the top of the profile:
+   - **PID - Original OpenTrickler Firmware** (recommended): stops at the
+     thresholds you set in the profile; tuned with PID Tuning (step 4).
+   - **Adaptive - Based on Opentrickler_ML Firmware**: older controller that
+     calculates its own stop margins from the AI model; tuned with AI Tuning
+     (step 4). Not recommended for normal use.
+4. Set the **Accepted Charge Tolerance**: the ± band that counts as a good
+   charge (green). Typical 0.02–0.04 gn.
+5. Save the profile.
 
-1. Go to Settings → Profiles and pick an empty slot.
-2. Name it for the setup, e.g. `Varget 36.5 - medium tube` or
-   `H4350 - large tube`.
-3. Save before running characterization.
+## 4. Tune the profile
 
-If you use the small/medium/large trickler tube options, treat each tube
-size on a given powder as its own profile (or at minimum, re-run
-characterization every time you change tube size — see step 6). The
-controller has no way to detect which physical tube is installed, so it
-relies entirely on the profile you selected matching the tube that's
-actually on the machine.
+The tuning menu entry is called **AI / PID Tuning** and opens the tool that
+matches the profile's controller. You can also start it from the menu on
+the device and save or discard the result there.
 
-## 5. Choose your controller
+**PID Tuning** (PID controller): runs a series of coarse and fine test
+throws, measures flow rate and scale delay, and sets the handoff and landing
+speeds. Enter your target weight and cup capacity, keep the cup on the scale
+and don't touch the machine while it runs. Save the result when it is done.
 
-Settings → Charge Mode → Controller:
+**AI Tuning** (Adaptive controller):
 
-- **PID - Original OpenTrickler Firmware** (default, recommended). The PID
-  gains, speed limits, and stop thresholds all live in the profile where
-  you can see and adjust them directly. AI characterization is used to
-  *suggest* values for those fields (a "Suggested PID Baseline") rather
-  than to drive the charge itself.
-- **Adaptive - Based on [Opentrickler_ML](https://github.com/WhoKilledBambiLabs/Opentrickler_ML)
-  Firmware**. The legacy adaptive controller, which computes its own
-  margins at runtime and overrides several profile settings. Kept for
-  compatibility; its internal margins are not directly user-editable.
+1. **Characterization** measures how your powder flows through the coarse
+   and fine tubes. Select the profile, enter your normal target weight, make
+   sure the scale is stable and zeroed, and start it. Follow the remove /
+   return cup prompts until it reports `ready_to_save`, then save it.
+2. **Machine calibration** (afterwards) measures scale delay, settling time
+   and the powder that still falls after a motor stops. Run it with the same
+   profile and target weight and save the result.
 
-If you're not sure which to use, start with PID — it's the more
-transparent and directly-tunable option, and it's what AI characterization
-is designed to feed into.
+Don't keep a tuning result if the scale was unstable, powder bridged in the
+tube, the cup prompts were interrupted, or the wrong profile was selected.
 
-## 6. Run AI characterization
+Re-run the tuning after changing powder, tube, scale or target range.
 
-Characterization measures how powder actually moves through your specific
-machine and profile — do this once per profile, and again any time the
-tube size, powder, or scale changes.
+Then throw a few supervised test charges and check them before you rely on
+the profile.
 
-1. Settings → AI Tuning, select the profile you just created.
-2. Enter your normal target charge weight for that setup.
-3. Confirm the scale is stable and zeroed.
-4. Start characterization and follow the pan remove/return prompts — it
-   runs a series of controlled coarse and fine pulses on its own.
-5. Wait for it to reach `ready_to_save`.
-6. Review the **Suggested PID Baseline** it produces. This is a suggestion,
-   not an automatic change — nothing is applied until you tell it to.
-7. If it looks reasonable, apply it to the profile's PID settings.
+## 5. Everyday use
 
-Don't trust a characterization run if the scale was unstable, powder
-bridged in the tube, the pan workflow was interrupted, or you had the
-wrong profile selected.
+1. Select the profile for your current setup and enter the target weight.
+2. Put the cup on the scale and wait for zero.
+3. Let the controller throw and settle the charge.
+4. Remove the cup **when prompted**. The LED colour shows the result:
+   green = in tolerance, yellow = under, red = over.
+5. Put the empty cup back for the next charge.
 
-**If you change trickler tube size, re-run characterization for that
-profile (or switch to the matching profile) before trusting the numbers.**
-This build fixes a bug where the large tube's characterization and
-suggested PID values could badly overthrow (previously up to ~20 gn) — see
-[CHANGELOG.md](CHANGELOG.md) — but characterization is still
-tube-specific: a model built on the small tube is not expected to be
-correct on the large tube.
+The web interface shows each charge as a weight curve (**Charge Timeline**)
+and keeps a **Throw History** with mean and spread.
 
-## 7. Optional: Manual Finish
+If charges become repeatedly under or over, re-run the tuning rather than
+adjusting individual settings by hand.
 
-For large-kernel powders (extruded stick powders where a single kernel is
-close to or larger than your Accepted Charge Tolerance), enable Manual
-Finish in Charge Mode settings and enter your cut-kernel weight (e.g. 0.04
-gn for a kernel cut in half). Instead of guessing at a fractional dose the
-controller can't deliver, it stops, tells you how many hand-cut fragments
-to add, and verifies the result.
+## 6. Optional features
 
-## 8. Optional: Reverse Tube
+All of these are in the profile's charge settings.
 
-If you're seeing consistent post-stop dribble (a little extra powder lands
-after the motor has already stopped), enable Reverse Tube for the coarse
-and/or fine motor in Charge Mode settings and set a small number of
-reverse revolutions (typical starting points: 0.05–0.3 rev coarse,
-0.02–0.15 rev fine). It briefly reverses that tube's motor right after its
-own genuine final stop to pull back residual powder sitting in the
-tube/gate. Start small and increase only if dribble persists — too much
-reverse travel can starve the next charge's initial feed.
+**Pre-charge** (needs a servo gate): while you handle the finished cup, the
+coarse tube drops the start of the next charge onto the closed gate. The next
+charge starts with that powder already in place. With pre-charge enabled,
+a slight undercharge is not topped up automatically (that would empty the
+gate into the cup); it is flagged yellow instead.
 
-## 9. Everyday use
+**Manual Finish**: for coarse stick powders whose single kernel is about as
+heavy as your tolerance. Enter the weight of a cut kernel (for example
+0.04 gn). The controller stops short, tells you how many cut kernels to add,
+and checks the result.
 
-1. Select the profile matching your current powder/tube/scale setup.
-2. Enter the target charge weight.
-3. Place the pan, wait for zero.
-4. Let the controller charge and settle; follow Manual Finish prompts if
-   enabled and triggered.
-5. Remove the pan only when prompted; verify the charge on your own
-   reference scale periodically.
-6. If you start seeing repeatable under/over behavior, re-run
-   characterization rather than nudging individual settings blind.
+**Reverse Tube**: if a little powder keeps falling after a motor stops,
+let that tube reverse briefly after its final stop. Start small (about
+0.05–0.3 revolutions coarse, 0.02–0.15 fine) and only increase if the
+dribble continues. Too much can starve the start of the next charge.
 
-## 10. Backing up your setup
+**Accuracy vs. speed**: a slider per profile that trades charge time for
+accuracy.
 
-Settings → Export Profile (single profile) or Export Config (all 8 slots)
-downloads a JSON file with the profile's base configuration, its
-charge-mode settings, and its kernel weight — enough to fully restore that
-profile via Import on another controller or after a reset. Worth doing
-once you have a profile you trust.
+## 7. Back up your profiles
 
-## 11. Optional: Check for Updates from the GUI
+**Export Profile** on the Profile page (one profile) or **Export Config** in the settings menu (all slots)
+downloads a JSON file with the profile settings and kernel weight. Use
+**Import** to restore it after a reset or move it to another controller.
+Worth doing once you have a profile you trust.
 
-Settings → Firmware Update → "Check for Updates" lets the controller check
-and install new firmware over WiFi by itself, without a laptop or the
-`tools/ota_upload.py` script. The device talks to **GitHub directly** over a
-real, certificate-verified HTTPS connection (it has its own built-in TLS 1.2
-client — see `src/ota_tls.c` — trusting a small bundle of well-known root
-CAs embedded in the firmware, the same way a browser would). There is no
-server of your own to run and nothing to keep online: GitHub hosts the two
-files the device needs, at a fixed, predictable URL for whatever release you
-most recently published:
+## 8. Update the firmware
 
-```
-https://github.com/<owner>/<repo>/releases/latest/download/manifest.json
-https://github.com/<owner>/<repo>/releases/latest/download/app.bin
-```
+**Settings → Firmware Update → Check for Updates** shows your version and
+the newest release. Click **Update Now** to download and install it over
+Wi-Fi. Nothing updates automatically, so the firmware never changes while
+you're working.
 
-**One-time setup, when you cut a release:**
-
-1. After building a release, run:
-   ```
-   python3 tools/publish_update_manifest.py \
-       --bin build-pico2w-release/app.bin \
-       --version "$(git describe --tags --always --dirty)" \
-       --notes "See CHANGELOG.md" \
-       --out-dir publish_out
-   ```
-   This writes `publish_out/app.bin` and `publish_out/manifest.json`:
-   ```json
-   {
-     "version": "2026.09.21-fork.6",
-     "notes": "See CHANGELOG.md",
-     "size": 992960,
-     "crc32": "0x1A2B3C4D"
-   }
-   ```
-2. Also copy `build-pico2w-release/app.uf2` alongside them. `manifest.json`
-   and `app.bin` are only what an *already-running* device's "Check for
-   Updates" asks for by name — a brand new board has no auto-updater to
-   invoke yet, so it needs a ready-to-flash `.uf2` on the release too (drag
-   it onto the `RPI-RP2` BOOTSEL drive the same way as step 3 at the top of
-   this doc). Attach all three files to the GitHub Release you're publishing
-   (drag them onto the release's asset list in the GitHub UI, or
-   `gh release upload <tag> publish_out/manifest.json publish_out/app.bin
-   publish_out/*.uf2`).
-
-   If you cut releases on GitHub (this fork lives at
-   [thomaspember1990/OpenTrickler-Firmware](https://github.com/thomaspember1990/OpenTrickler-Firmware))
-   and want this automated,
-   `.github/workflows/publish-update-manifest.yml` is already wired up: it
-   fires on every published GitHub release, builds the firmware the same way
-   `cmake.yml` does, runs `publish_update_manifest.py`, and uploads all three
-   files straight to that same release using GitHub's own automatically
-   provided token. **No repository secrets to create or manage at all** —
-   publishing a GitHub release is the entire workflow.
-
-**On the device, once:**
-
-1. Settings → Firmware Update → set **GitHub Owner / Org** (e.g.
-   `thomaspember1990`) and **GitHub Repository** (e.g.
-   `OpenTrickler-Firmware`), then **Save Repository**.
-
-**Whenever you want to check:**
-
-1. Click **Check for Updates**. The page shows your running version next to
-   the latest one it found, plus your `--notes` text.
-2. If a newer version is available, click **Update Now**. The device
-   downloads `app.bin` straight from GitHub into the same OTA staging area
-   used by `tools/ota_upload.py`, verifying GitHub's certificate chain
-   during download and the file's CRC32 once it's complete, and — once your
-   firmware includes an OTA bootloader transition build (see the in-app note
-   on that page) — applies it and reboots on its own.
-
-Every downloader's device does this same direct-to-GitHub check
-independently; nothing is shared or run centrally on your end beyond
-attaching two files to each release.
-
-Nothing here ever happens automatically: checking and applying are both
-explicit button presses, so firmware never changes mid-session on
-reloading equipment you're actively using.
+If an update over Wi-Fi fails, install the `.uf2` from the Releases page over
+USB as in step 1. That also works for going back to an older version.
 
 ## Getting help
 
-- Full list of what this fork changes vs. upstream: [CHANGELOG.md](CHANGELOG.md)
-- Upstream AI tuning algorithm details and REST reference:
+- What changed in each version: [CHANGELOG.md](CHANGELOG.md)
+- Scale and Wi-Fi setup notes: [manuals/](manuals/)
+- Details of the AI tuning:
   [AI tuning reference](https://whokilledbambilabs.github.io/Opentrickler_ML/ai-tuning-reference.html)
-- Building from source: see the "Build From Source" section in
-  [README.md](README.md)
+- Bugs and questions:
+  [GitHub Issues](https://github.com/Bleach3D/OpenTrickler-Autotune/issues)
