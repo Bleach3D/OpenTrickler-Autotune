@@ -1159,6 +1159,13 @@ void charge_mode_wait_for_zero() {
     // Update current status
     snprintf(title_string, sizeof(title_string), "Waiting for Zero");
 
+    // If the scale sits steady but off zero, the tare did not take (dropped
+    // command, or tared while the pan was still moving). With auto-zero on,
+    // re-send it a couple of times instead of waiting forever.
+    const bool auto_zero = charge_mode_config.eeprom_charge_mode_data.auto_zero_on_cup_return;
+    uint8_t auto_retare_count = 0;
+    TickType_t last_tare_tick = xTaskGetTickCount();
+
     // Stop condition: 10 stable measurements in 200ms apart (2 seconds minimum)
     while (true) {
         TickType_t last_measurement_tick = xTaskGetTickCount();
@@ -1171,6 +1178,8 @@ void charge_mode_wait_for_zero() {
         }
         else if (button_encoder_event == BUTTON_ENCODER_PRESSED) {
             scale_config.scale_handle->force_zero();
+            data_buffer.reset();
+            last_tare_tick = xTaskGetTickCount();
         }
 
         // Perform measurement (max delay 300 seconds   )
@@ -1182,9 +1191,20 @@ void charge_mode_wait_for_zero() {
 
         // Generate stop condition
         if (data_buffer.getCounter() >= 10){
-            if (data_buffer.getSd() < charge_mode_config.eeprom_charge_mode_data.set_point_sd_margin &&
+            bool steady = data_buffer.getSd() < charge_mode_config.eeprom_charge_mode_data.set_point_sd_margin;
+            if (steady &&
                 fabsf(data_buffer.getMean()) < charge_mode_config.eeprom_charge_mode_data.set_point_mean_margin) {
                 break;
+            }
+            // Steady, clearly not zero (well inside a plausible empty-pan
+            // offset, i.e. not "cup removed"), tare a while ago: tare again.
+            if (auto_zero && steady && auto_retare_count < 2 &&
+                fabsf(data_buffer.getMean()) < 5.0f &&
+                (xTaskGetTickCount() - last_tare_tick) > pdMS_TO_TICKS(3000)) {
+                scale_config.scale_handle->force_zero();
+                auto_retare_count++;
+                last_tare_tick = xTaskGetTickCount();
+                data_buffer.reset();
             }
         }
 
@@ -4009,8 +4029,28 @@ void charge_mode_wait_for_cup_return() {
         vTaskDelayUntil(&last_sample_tick, pdMS_TO_TICKS(20));
     }
 
-    // Auto zero scale if enabled
+    // Auto zero scale if enabled. The first reading >= 0 arrives while the
+    // cup is still settling on the pan, so wait (bounded) for a few steady
+    // readings first -- taring a swinging pan either gets ignored by the scale
+    // or leaves an offset, and "Waiting for Zero" then never completes.
     if (charge_mode_config.eeprom_charge_mode_data.auto_zero_on_cup_return) {
+        FloatRingBuffer settle_buffer(5);
+        const float settle_sd = fmaxf(charge_mode_config.eeprom_charge_mode_data.set_point_sd_margin, 0.02f);
+        TickType_t settle_start = xTaskGetTickCount();
+        while ((xTaskGetTickCount() - settle_start) < pdMS_TO_TICKS(2500)) {
+            if (button_wait_for_input(false) == BUTTON_RST_PRESSED) {
+                charge_mode_config.charge_mode_state = CHARGE_MODE_EXIT;
+                return;
+            }
+            float w;
+            if (scale_block_wait_for_next_measurement(200, &w) &&
+                charge_mode_is_valid_scale_measurement(w)) {
+                settle_buffer.enqueue(w);
+                if (settle_buffer.getCounter() >= 5 && settle_buffer.getSd() < settle_sd) {
+                    break;
+                }
+            }
+        }
         scale_config.scale_handle->force_zero();
     }
 

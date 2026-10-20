@@ -11,6 +11,22 @@ compares the version strings literally.
 
 ## [Unreleased]
 
+### Fixed
+
+- **G&G JJ-B scale: tare/zero unreliable** (auto-zero and pressing the
+  encoder). The tare command was written from another task at an arbitrary
+  moment while the listener task polls the scale non-stop, so it could hit
+  the scale while it was still handling a data request or sending its reply;
+  the JJ-B does not acknowledge commands, so a lost tare went unnoticed. The
+  listener task now sends the tare itself between two polls once the line has
+  been quiet, pauses polling for 600 ms, checks that the reading is back
+  within ±0.05 and repeats the tare up to 3 times.
+- **Auto-zero on cup return** fired on the first reading >= 0, i.e. while the
+  cup was still settling. It now waits (max. 2.5 s) for steady readings.
+- **"Waiting for Zero"** with auto-zero on: if the scale is steady but off zero
+  (< 5 gn) for 3 s after a tare, the tare is re-sent (max. 2 times) instead of
+  waiting forever.
+
 ## [v1.3.0] — 2026-10-18
 
 Taken over from

@@ -5,7 +5,8 @@
 #include <time.h>
 #include <math.h>
 #include <task.h>
-#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
 
 #include "hardware/uart.h"
 #include "configuration.h"
@@ -31,6 +32,37 @@ typedef union {
     char bytes[14];
 } gngscale_standard_data_format_t;
 
+
+// ---------------------------------------------------------------------------
+// Tare handling
+// ---------------------------------------------------------------------------
+// The listener task polls the scale continuously ("!p", wait for the 14 byte
+// reply, 50 ms pause, repeat), so the scale is busy answering most of the
+// time. Writing "!t" from another task at an arbitrary moment (as before)
+// could land while the scale was still processing "!p" or transmitting its
+// reply, and the JJ-B gives no acknowledgement, so a dropped tare was never
+// noticed. Now force_zero() only raises a request; the listener task -- the
+// only task that talks to the scale -- sends the tare between two polls once
+// the line has been quiet, pauses polling while the scale tares, then checks
+// that the reading came back to ~0 and repeats the tare if it did not.
+#define GNG_TARE_QUIET_MS           40      // line must be idle this long before "!t"
+#define GNG_TARE_SETTLE_MS          600     // no polling while the scale tares
+#define GNG_TARE_VERIFY_SAMPLES     3       // valid readings used to check the result
+#define GNG_TARE_VERIFY_WINDOW_MS   1500    // give up checking after this long
+#define GNG_TARE_ZERO_BAND          0.05f   // |reading| that counts as "tared" (~3 digits at 0.001 g)
+#define GNG_TARE_MAX_ATTEMPTS       3
+
+static volatile bool tare_requested = false;
+
+typedef struct {
+    bool active;
+    uint8_t attempts;
+    uint8_t samples;
+    float sum;
+    TickType_t start_tick;
+} gng_tare_verify_t;
+
+static gng_tare_verify_t tare_verify = {0};
 
 // Forward declaration
 void _gng_scale_listener_task(void *p);
@@ -70,12 +102,80 @@ static float _decode_measurement_msg(gngscale_standard_data_format_t * msg) {
     return weight;
 }
 
+// Wait until nothing has arrived on the scale UART for GNG_TARE_QUIET_MS
+// (bounded, so a scale that streams forever cannot stall the task).
+static void _gng_wait_line_quiet(void) {
+    TickType_t start = xTaskGetTickCount();
+    TickType_t last_rx = start;
+    while ((xTaskGetTickCount() - last_rx) < pdMS_TO_TICKS(GNG_TARE_QUIET_MS) &&
+           (xTaskGetTickCount() - start) < pdMS_TO_TICKS(500)) {
+        while (uart_is_readable(SCALE_UART)) {
+            uart_getc(SCALE_UART);
+            last_rx = xTaskGetTickCount();
+        }
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+}
+
+// Send the tare command from the listener task (line idle), then leave the
+// scale alone while it tares.
+static void _gng_send_tare(bool new_request) {
+    _gng_wait_line_quiet();
+    scale_write(CMD_TARE_FUNC, strlen(CMD_TARE_FUNC));
+    vTaskDelay(pdMS_TO_TICKS(GNG_TARE_SETTLE_MS));
+
+    if (new_request) {
+        tare_verify.attempts = 0;
+    }
+    tare_verify.attempts++;
+    tare_verify.active = true;
+    tare_verify.samples = 0;
+    tare_verify.sum = 0.0f;
+    tare_verify.start_tick = xTaskGetTickCount();
+}
+
+// Feed each decoded reading; returns true when the tare has to be repeated.
+static bool _gng_verify_tare(float reading) {
+    if (!tare_verify.active) {
+        return false;
+    }
+    if ((xTaskGetTickCount() - tare_verify.start_tick) > pdMS_TO_TICKS(GNG_TARE_VERIFY_WINDOW_MS)) {
+        // Could not get enough valid readings (e.g. scale still showing dashes)
+        tare_verify.active = false;
+        return tare_verify.attempts < GNG_TARE_MAX_ATTEMPTS;
+    }
+    if (!isfinite(reading)) {
+        return false;
+    }
+    tare_verify.sum += reading;
+    tare_verify.samples++;
+    if (tare_verify.samples < GNG_TARE_VERIFY_SAMPLES) {
+        return false;
+    }
+    tare_verify.active = false;
+    float mean = tare_verify.sum / tare_verify.samples;
+    return fabsf(mean) > GNG_TARE_ZERO_BAND && tare_verify.attempts < GNG_TARE_MAX_ATTEMPTS;
+}
+
 //read UART
 void _gng_scale_listener_task(void *p) {
     uint8_t string_buf_idx = 0;
     gngscale_standard_data_format_t frame;
+    bool repeat_tare = false;
 
     while (true) {
+        // Tare requested (or the last one did not take): send it now, between
+        // two polls, while the line is idle.
+        if (tare_requested) {
+            tare_requested = false;
+            repeat_tare = false;
+            _gng_send_tare(true);
+        }
+        else if (repeat_tare) {
+            repeat_tare = false;
+            _gng_send_tare(false);
+        }
+
         // Reset frame buffer index at the start of each poll cycle (fixes partial-frame carryover on timeout)
         string_buf_idx = 0;
 
@@ -100,6 +200,9 @@ void _gng_scale_listener_task(void *p) {
                 if (string_buf_idx == sizeof(gngscale_standard_data_format_t)) {
                     // Data is ready, send to decode
                     scale_config.current_scale_measurement = _decode_measurement_msg(&frame);
+                    if (_gng_verify_tare(scale_config.current_scale_measurement)) {
+                        repeat_tare = true;
+                    }
                     // Signal the data is ready
                     if (scale_config.scale_measurement_ready) {
                         xSemaphoreGive(scale_config.scale_measurement_ready);
@@ -147,7 +250,8 @@ void scalegng_press_print_key() {
 //ESC t -> 0x1B 0x74 0x0D 0x0A standard setting
 // ! t -> 0x21 0x74 0x0D 0x0A
 void scalegng_press_tare_key() {
-    scale_write(CMD_TARE_FUNC, strlen(CMD_TARE_FUNC));
+    // Handled by the listener task between two polls (see "Tare handling")
+    tare_requested = true;
 }
 
 //ESC s -> 0x1B 0x73 0x0D 0x0A standard setting
