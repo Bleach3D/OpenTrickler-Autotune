@@ -1371,8 +1371,9 @@ static float ai_tuning_interpolate_stage_speed_unlocked(ai_tuning_state_t state,
     }
 
     min_speed = fmaxf(min_speed, motor_min_speed);
+    // The profile max is a hard ceiling: tubes can stall well below the motor max.
     float max_speed = fminf(motor_max_speed, hardware_cap);
-    if (max_speed <= 0.0f) {
+    if (profile_max_speed > 0.0f && (max_speed <= 0.0f || profile_max_speed < max_speed)) {
         max_speed = fminf(profile_max_speed, hardware_cap);
     }
 

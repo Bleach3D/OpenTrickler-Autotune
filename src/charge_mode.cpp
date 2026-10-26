@@ -868,7 +868,7 @@ static bool charge_mode_salvage_undercharge(float* measurement_io) {
     bool have_model = ai_tuning_get_enabled_model_copy((uint8_t)profile_get_selected_idx(), &model) &&
                       model.valid &&
                       model.enabled;
-    const float fine_trickler_max_speed = have_model
+    const float fine_trickler_max_speed = (have_model && profile_fine_max_speed <= 0.0f)
         ? fine_motor_max_speed
         : fminf(fine_motor_max_speed, profile_fine_max_speed);
     if (fine_trickler_max_speed <= 0.0f) {
@@ -1281,8 +1281,12 @@ void charge_mode_wait_for_complete() {
                                                 current_profile->fine_max_flow_speed_rps);
     const float fine_trickler_min_speed = fmaxf(get_motor_min_speed(SELECT_FINE_TRICKLER_MOTOR),
                                                 current_profile->fine_min_flow_speed_rps);
-    const float ai_coarse_trickler_max_speed = coarse_motor_max_speed;
-    const float ai_fine_trickler_max_speed = fine_motor_max_speed;
+    const float ai_coarse_trickler_max_speed = current_profile->coarse_max_flow_speed_rps > 0.0f
+        ? coarse_trickler_max_speed
+        : coarse_motor_max_speed;
+    const float ai_fine_trickler_max_speed = current_profile->fine_max_flow_speed_rps > 0.0f
+        ? fine_trickler_max_speed
+        : fine_motor_max_speed;
 
     TickType_t coarse_stop_tick = 0;
     float coarse_stop_weight = 0.0f;

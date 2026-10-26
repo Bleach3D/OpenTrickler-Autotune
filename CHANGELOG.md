@@ -11,6 +11,14 @@ compares the version strings literally.
 
 ## [Unreleased]
 
+### Fixed
+
+- **AI Tuning and the Adaptive controller ignored the profile's max flow
+  speed.** Characterization swept up to the motor's maximum speed (capped at
+  8 rps coarse / 6 rps fine), so a tube that stalls below that stalled during
+  characterization. The profile's coarse/fine max flow speed is now a hard
+  ceiling for characterization and for Adaptive charges whenever it is set.
+
 ## [v1.3.0] — 2026-10-18
 
 Taken over from
