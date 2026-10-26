@@ -170,6 +170,21 @@ void charge_timeline_finish(bool final_valid, float final_weight) {
 }
 
 
+// Refine the final weight of a finished recording (sampling has already
+// stopped, but the settled result can still change while the cup is on).
+void charge_timeline_update_final(bool final_valid, float final_weight) {
+    if (tl_mutex == NULL) {
+        return;
+    }
+    xSemaphoreTake(tl_mutex, portMAX_DELAY);
+    if (tl.state == TIMELINE_STATE_DONE) {
+        tl.final_valid = final_valid && isfinite(final_weight);
+        tl.final_weight = final_weight;
+    }
+    xSemaphoreGive(tl_mutex);
+}
+
+
 void charge_timeline_abort(void) {
     if (tl_mutex == NULL) {
         return;

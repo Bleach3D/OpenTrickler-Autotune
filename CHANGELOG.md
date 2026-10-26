@@ -18,6 +18,28 @@ compares the version strings literally.
   8 rps coarse / 6 rps fine), so a tube that stalls below that stalled during
   characterization. The profile's coarse/fine max flow speed is now a hard
   ceiling for characterization and for Adaptive charges whenever it is set.
+- **Motor max speed was reset on every start.** Any coarse/fine motor max
+  speed below 8 / 6 rps was raised back to that on boot and saved, so a
+  lower limit for a stalling tube never stuck. Only an unset (0) value is
+  now replaced by the default.
+- **Small undercharges were flagged UNDER without being finished.** After a
+  brief overshoot that settled e.g. 0.04 gn under target, the fine finish
+  gave up because the shortfall was below its stop margin (which allows for
+  powder still falling after a stop, although the motor was idle). It now
+  nudges the fine trickler at minimum speed, up to three times with a settle
+  in between.
+- **The Over/Under Throw dialog reopened right after being closed.** The
+  web interface showed it on every status poll while the result stood; it
+  now opens once when the result appears.
+- **Charge Timeline kept recording during "Remove Cup".** It now stops at
+  most 3 s after "Remove Cup" appears; the final weight shown still follows
+  the settled result until the cup is lifted.
+
+### Changed
+
+- **Web interface on desktop.** On wide screens the Trickler page uses two
+  columns (controls left, Charge Timeline and Throw History right) and the
+  Settings menu stays open beside the page. The phone layout is unchanged.
 
 ## [v1.3.0] — 2026-10-18
 

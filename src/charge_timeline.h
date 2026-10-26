@@ -32,6 +32,9 @@ void charge_timeline_begin(float target_weight, float tolerance);
 // Finish the current recording with the settled final weight.
 void charge_timeline_finish(bool final_valid, float final_weight);
 
+// Update the final weight of an already finished recording.
+void charge_timeline_update_final(bool final_valid, float final_weight);
+
 // Stop the current recording without a result (charge aborted).
 void charge_timeline_abort(void);
 

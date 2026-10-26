@@ -82,13 +82,14 @@ static bool motor_config_apply_memphis_v2_nema17_envelope(eeprom_motor_data_t *m
 
     bool changed = false;
 
-    // Older EEPROM configs capped both motors at 5 rps. For the 17HS2408 Memphis V2
-    // setup, allow AI characterization to explore the useful hardware envelope.
-    if (motor_data->motor_data[0].max_speed_rps < default_motor_data.motor_data[0].max_speed_rps) {
+    // Only repair an unset max speed. This used to raise any value below the
+    // default on every boot, so a lower limit set for a tube that stalls
+    // (e.g. coarse at ~4 rps) was silently reset after each restart.
+    if (motor_data->motor_data[0].max_speed_rps == 0) {
         motor_data->motor_data[0].max_speed_rps = default_motor_data.motor_data[0].max_speed_rps;
         changed = true;
     }
-    if (motor_data->motor_data[1].max_speed_rps < default_motor_data.motor_data[1].max_speed_rps) {
+    if (motor_data->motor_data[1].max_speed_rps == 0) {
         motor_data->motor_data[1].max_speed_rps = default_motor_data.motor_data[1].max_speed_rps;
         changed = true;
     }

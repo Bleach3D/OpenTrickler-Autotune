@@ -158,6 +158,11 @@ typedef enum {
 static const float SCALE_MAX_REASONABLE_WEIGHT_GN = 10000.0f;
 static const uint8_t FINAL_WEIGHT_SETTLE_SAMPLE_COUNT = 5;
 static const uint32_t FINAL_WEIGHT_SETTLE_TIMEOUT_MS = 3000;
+// How long the charge timeline keeps sampling once "Remove Cup" is shown.
+static const uint32_t TIMELINE_REMOVE_CUP_TAIL_MS = 3000;
+// Fine nudges for an undercharge that is outside the tolerance but too small
+// for a regular salvage run.
+static const int UNDERCHARGE_SALVAGE_MAX_PASSES = 3;
 static const float CHARGE_RESULT_TOLERANCE_GN = 0.0205f;
 static const uint32_t CHARGE_PROGRESS_ORANGE = 0xFF8000ul;
 
@@ -985,7 +990,15 @@ static bool charge_mode_salvage_undercharge(float* measurement_io) {
 
         charge_mode_set_live_phase("salvage", under_weight, stop_margin);
         if (under_weight <= stop_margin) {
-            break;
+            if (attempted) {
+                break;
+            }
+            // Still outside the tolerance, but closer than the stop margin.
+            // The margin covers powder in flight after a stop; with the motor
+            // idle nothing is in flight, so giving up here would leave e.g. a
+            // -0.04 gn charge flagged UNDER without any attempt to finish it.
+            // Nudge once at minimum speed instead.
+            salvage_speed = salvage_min_speed;
         }
 
         if (!attempted) {
@@ -3709,9 +3722,16 @@ void charge_mode_stabilize() {
     // pan either, so leave a slight undercharge flagged for the operator.
     if (last_final_weight_valid && !last_charge_was_ai_tuning &&
         !precharge_loaded_on_gate) {
-        charge_mode_salvage_undercharge(&last_final_weight_gn);
-        if (charge_mode_config.charge_mode_state == CHARGE_MODE_EXIT) {
-            return;
+        // Each pass settles before returning, so a nudge that fell short gets
+        // another one rather than being flagged UNDER.
+        for (int pass = 0; pass < UNDERCHARGE_SALVAGE_MAX_PASSES; pass++) {
+            bool attempted = charge_mode_salvage_undercharge(&last_final_weight_gn);
+            if (charge_mode_config.charge_mode_state == CHARGE_MODE_EXIT) {
+                return;
+            }
+            if (!attempted) {
+                break;
+            }
         }
     }
 
@@ -3757,21 +3777,20 @@ void charge_mode_wait_for_cup_removal() {
                                    : 0.0f,
                                result_tolerance);
 
-    // The charge timeline is closed only once the result can no longer change
-    // (cup lifted, step left or aborted), so it records the settled weight
-    // rather than whatever the scale showed on entering this step.
+    // The charge timeline stops sampling at most TIMELINE_REMOVE_CUP_TAIL_MS
+    // into this step, but its final weight keeps following the settled result
+    // until the cup is lifted (or the step is left or aborted).
+    const TickType_t remove_cup_start_tick = xTaskGetTickCount();
     bool timeline_finished = false;
     auto finish_timeline = [&]() {
+        bool final_valid = last_final_weight_valid || result_measurement_valid;
+        float final_weight = last_final_weight_valid ? last_final_weight_gn : result_measurement;
         if (timeline_finished) {
+            charge_timeline_update_final(final_valid, final_weight);
             return;
         }
         timeline_finished = true;
-        if (last_final_weight_valid) {
-            charge_timeline_finish(true, last_final_weight_gn);
-        }
-        else {
-            charge_timeline_finish(result_measurement_valid, result_measurement);
-        }
+        charge_timeline_finish(final_valid, final_weight);
     };
 
     // Deferred AI tuning recording - use settled measurement for accurate weight
@@ -3893,6 +3912,10 @@ void charge_mode_wait_for_cup_removal() {
                                            true,
                                            dynamic_result,
                                            result_tolerance);
+            if (timeline_finished ||
+                (xTaskGetTickCount() - remove_cup_start_tick) >= pdMS_TO_TICKS(TIMELINE_REMOVE_CUP_TAIL_MS)) {
+                finish_timeline();
+            }
         }
         else {
             // Cup is actually off the scale (or the reading is mid-swing
